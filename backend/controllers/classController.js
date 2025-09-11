@@ -342,7 +342,6 @@ exports.getStudentsNotInAnyClass = async (req, res) => {
     try {
         // Get all student IDs assigned to any class
         const classes = await Class.find({}, 'studentIds').lean();
-        console.log(classes);
         const assignedStudentIds = new Set();
         classes.forEach(cls => {
             (cls.studentIds || []).forEach(id => assignedStudentIds.add(id.toString()));
