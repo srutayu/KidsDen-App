@@ -336,3 +336,27 @@ exports.getClassesForTeacher = async (req, res) => {
         res.status(500).json({ message: 'Could not retrieve classes for the teacher' });
     }
 }
+
+
+exports.getStudentsNotInAnyClass = async (req, res) => {
+    try {
+        // Get all student IDs assigned to any class
+        const classes = await Class.find({}, 'studentIds').lean();
+        console.log(classes);
+        const assignedStudentIds = new Set();
+        classes.forEach(cls => {
+            (cls.studentIds || []).forEach(id => assignedStudentIds.add(id.toString()));
+        });
+
+        // Find students not in any class
+        const studentsNotInAnyClass = await User.find({
+            role: 'student',
+            _id: { $nin: Array.from(assignedStudentIds) }
+        }).select('_id name email');
+
+        res.json({ students: studentsNotInAnyClass });
+    } catch (error) {
+        console.error('Error fetching students not in any class:', error);
+        res.status(500).json({ message: 'Server error' });
+    }
+}
