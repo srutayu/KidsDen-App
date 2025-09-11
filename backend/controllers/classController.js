@@ -218,7 +218,9 @@ exports.deleteStudentFromClass = async (req, res) => {
 exports.getClassesName = async (req, res) => {
     try {
         const classes = await Class.find().select('name');
-        res.json({ classes });
+        // Extract unique class names
+        const uniqueNames = [...new Set(classes.map(cls => cls.name))];
+        res.json({ classes: uniqueNames });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Could not retrieve classes' });
