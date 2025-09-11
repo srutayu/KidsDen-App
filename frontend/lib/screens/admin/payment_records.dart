@@ -1,0 +1,700 @@
+// import 'dart:convert';
+// import 'package:flutter/material.dart';
+// import 'package:frontend/constants/url.dart';
+// import 'package:frontend/controllers/class_controller.dart';
+// import 'package:frontend/models/payment_model.dart';
+// import 'package:http/http.dart' as http;
+// import 'package:provider/provider.dart';
+// import 'package:syncfusion_flutter_charts/charts.dart';
+
+// import '../../provider/auth_provider.dart';
+
+// class PaymentRecords extends StatefulWidget {
+//   const PaymentRecords({super.key});
+
+//   @override
+//   State<PaymentRecords> createState() => _PaymentRecordsState();
+// }
+
+// class _PaymentRecordsState extends State<PaymentRecords> {
+//   static final _baseURL = URL.baseURL;
+//   late final token = Provider.of<AuthProvider>(context, listen: false).token;
+
+//   String? selectedClass;
+//   DateTime selectedDate = DateTime.now();
+//   bool loading = false;
+
+//   Map<String, int> statusCounts = {'paid': 0, 'pending': 0, 'unpaid': 0};
+//   Map<String, List<String>> studentsByStatus = {
+//     'paid': [],
+//     'pending': [],
+//     'unpaid': [],
+//   };
+//   List<String> classes = [];
+
+//   // Cache for user names to avoid repeated API calls
+//   final Map<String, String> _userNameCache = {};
+
+//   @override
+//   void initState() {
+//     super.initState();
+//     fetchClasses();
+//   }
+
+//   void fetchClasses() async {
+//     List<String> fetchedClasses = await ClassController.getClasses(token);
+//     setState(() {
+//       classes = fetchedClasses;
+//       if (classes.isNotEmpty) {
+//         selectedClass = classes[0];
+//         fetchPaymentStatus();
+//       } else {
+//         selectedClass = null;
+//       }
+//     });
+//   }
+
+//   Future<String> fetchUserNameCached(String userId) async {
+//     if (userId.isEmpty) return 'Unknown';
+//     if (_userNameCache.containsKey(userId)) {
+//       // print('Cache hit for $userId: ${_userNameCache[userId]}');
+//       return _userNameCache[userId]!;
+//     }
+//     // print('Fetching username for $userId from API');
+//     try {
+//       final url = Uri.parse('$_baseURL/admin/user-name?userId=$userId');
+//       final response = await http.get(url, headers: {
+//         'Content-Type': 'application/json',
+//         'Authorization': 'Bearer $token',
+//       });
+
+//       if (response.statusCode == 200) {
+//         final data = json.decode(response.body);
+//         String name = data['name'] ?? userId;
+//         _userNameCache[userId] = name;
+//         print('Fetched name for $userId: $name');
+//         return name;
+//       } else {
+//         print('Failed to fetch username for $userId, status: ${response.statusCode}');
+//         return userId;
+//       }
+//     } catch (e) {
+//       print('Exception fetching username for $userId: $e');
+//       return userId;
+//     }
+//   }
+
+//   Future<Map<String, List<String>>> fetchStudentsWithNames(Map<String, List<String>> studentsById) async {
+//     final Map<String, List<String>> result = {};
+//     for (var status in ['paid', 'pending', 'unpaid']) {
+//       List<String> studentIds = studentsById[status] ?? [];
+//       // print(studentIds);
+//       List<String> names = [];
+//       for (var id in studentIds) {
+//         if (id.isNotEmpty) {
+//           final name = await fetchUserNameCached(id);
+//           names.add(name);
+//         }
+//       }
+//       result[status] = names;
+//     }
+//     return result;
+//   }
+
+//   Future<void> fetchPaymentStatus() async {
+//     if (selectedClass == null) return;
+
+//     setState(() => loading = true);
+
+//     final year = selectedDate.year.toString();
+//     final monthNumber = selectedDate.month;
+//     final monthName = PaymentModel.getMonthName(monthNumber);
+
+//     final url = Uri.parse('$_baseURL/admin/get-status?classId=$selectedClass&year=$year&month=$monthName');
+//     // print("classId $selectedClass Year $year month $monthName");
+
+//     try {
+//       final response = await http.get(url, headers: {
+//         'Content-Type': 'application/json',
+//         'Authorization': 'Bearer $token',
+//       });
+
+//       if (response.statusCode == 200) {
+//         final data = json.decode(response.body);
+
+//         final knownStatuses = {'paid', 'pending', 'unpaid'};
+
+//         Map<String, int> counts = {'paid': 0, 'pending': 0, 'unpaid': 0};
+
+//         for (final item in data['summary'] ?? []) {
+//           String status = (item['status'] as String?) ?? 'unknown';
+//           int count = (item['count'] as int?) ?? 0;
+//           if (knownStatuses.contains(status)) {
+//             counts[status] = count;
+//           } else {
+//             print('Ignoring unknown status: $status');
+//           }
+//         }
+
+
+//         Map<String, List<String>> studentsRaw = {
+//           'paid': data['studentsByStatus']?['paid'] != null
+//               ? (data['studentsByStatus']['paid'] as List).whereType<String>().toList()
+//               : [],
+//           'pending': data['studentsByStatus']?['pending'] != null
+//               ? (data['studentsByStatus']['pending'] as List).whereType<String>().toList()
+//               : [],
+//           'unpaid': data['studentsByStatus']?['unpaid'] != null
+//               ? (data['studentsByStatus']['unpaid'] as List).whereType<String>().toList()
+//               : [],
+//         };
+
+//         final namedStudents = await fetchStudentsWithNames(studentsRaw);
+
+//         setState(() {
+//           // statusCounts = counts;
+//           statusCounts['paid'] = counts['paid'] ?? 0;
+//           statusCounts['pending'] = counts['pending'] ?? 0;
+
+//           // For unpaid, count it from the studentsByStatus list length
+//           statusCounts['unpaid'] = namedStudents['unpaid']?.length ?? 0;
+//           studentsByStatus = namedStudents;
+//         });
+
+//         // print('Status counts: $statusCounts');
+//         // print('Students by status: $studentsByStatus');
+//       } else {
+//         throw Exception('Failed to load payment status');
+//       }
+//     } catch (e) {
+//       print(e);
+//       ScaffoldMessenger.of(context).showSnackBar(
+//         SnackBar(content: Text('Error fetching payment data')),
+//       );
+//     } finally {
+//       setState(() => loading = false);
+//     }
+//   }
+
+//   Future<void> pickMonth() async {
+//     final initialDateFixed = DateTime(selectedDate.year, selectedDate.month, 1);
+//     final picked = await showDatePicker(
+//       context: context,
+//       initialDate: initialDateFixed,
+//       firstDate: DateTime(2020),
+//       lastDate: DateTime(2100),
+//       helpText: 'Select month and year',
+//     );
+
+//     if (picked != null) {
+//       setState(() {
+//         selectedDate = DateTime(picked.year, picked.month);
+//       });
+//       await fetchPaymentStatus();
+//     }
+//   }
+
+//   @override
+//   Widget build(BuildContext context) {
+//     final totalCount = statusCounts.values.fold(0, (sum, val) => sum + val);
+
+//     return Scaffold(
+//       appBar: AppBar(
+//         automaticallyImplyLeading: false,
+//         title: Text('Payment Status'),
+//       ),
+//       body: Padding(
+//         padding: EdgeInsets.all(16),
+//         child: classes.isEmpty
+//             ? Center(child: CircularProgressIndicator())
+//             : loading
+//             ? Center(child: CircularProgressIndicator())
+//             : Column(
+//           children: [
+//             DropdownButton<String>(
+//               value: selectedClass,
+//               onChanged: (value) {
+//                 if (value != null) {
+//                   setState(() {
+//                     selectedClass = value;
+//                   });
+//                   fetchPaymentStatus();
+//                 }
+//               },
+//               items: classes
+//                   .map((cls) => DropdownMenuItem(value: cls, child: Text(cls)))
+//                   .toList(),
+//               hint: Text('Select Class'),
+//             ),
+
+//             SizedBox(height: 12),
+
+//             Row(
+//               children: [
+//                 Text('Month: ${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}'),
+//                 SizedBox(width: 10),
+//                 ElevatedButton(onPressed: pickMonth, child: Text('Select Month')),
+//               ],
+//             ),
+
+//             SizedBox(height: 20),
+
+//             if (totalCount > 0)
+
+//               SizedBox(
+//                 height: 250,
+//                 child: SfCircularChart(
+//                   legend: Legend(
+//                     isVisible: true,
+//                     overflowMode: LegendItemOverflowMode.wrap,
+//                   ),
+//                   tooltipBehavior: TooltipBehavior(enable: true),
+//                   series: <PieSeries<StatusData, String>>[
+//                     PieSeries<StatusData, String>(
+//                       dataSource: [
+//                         StatusData('Paid', statusCounts['paid'] ?? 0, Colors.green),
+//                         StatusData('Pending', statusCounts['pending'] ?? 0, Colors.orange),
+//                         StatusData('Unpaid', statusCounts['unpaid'] ?? 0, Colors.red),
+//                       ].where((e) => e.count>0).toList(),
+//                       xValueMapper: (StatusData data, _) => data.status,
+//                       yValueMapper: (StatusData data, _) => data.count,
+//                       pointColorMapper: (StatusData data, _) => data.color,
+//                       dataLabelMapper: (StatusData data, _) => '${data.status}: ${data.count}',
+//                       dataLabelSettings: DataLabelSettings(isVisible: true),
+//                       enableTooltip: true,
+//                     ),
+//                   ],
+//                 ),
+//               )
+//             else
+//               Text('No payment data for this month and class'),
+
+//             SizedBox(height: 20),
+
+//             Expanded(
+//               child: ListView(
+//                 children: [
+//                   buildStudentList('Paid Students', studentsByStatus['paid']!),
+//                   buildStudentList('Pending Students', studentsByStatus['pending']!),
+//                   buildStudentList('Unpaid Students', studentsByStatus['unpaid']!),
+//                 ],
+//               ),
+//             )
+//           ],
+//         ),
+//       ),
+//     );
+//   }
+
+//   Widget buildStudentList(String title, List<String> students) {
+//     return ExpansionTile(
+//       title: Text('$title (${students.length})'),
+//       children: students.isEmpty
+//           ? [ListTile(title: Text('No students'))]
+//           : students.map((name) => ListTile(title: Text(name))).toList(),
+//     );
+//   }
+// }
+
+// class StatusData {
+//   final String status;
+//   final int count;
+//   final Color color;
+
+//   StatusData(this.status, this.count, this.color);
+// }
+import 'dart:convert';
+import 'package:flutter/material.dart';
+import 'package:frontend/constants/url.dart';
+import 'package:frontend/controllers/class_controller.dart';
+import 'package:frontend/controllers/fees_controller.dart';
+import 'package:frontend/models/payment_model.dart';
+import 'package:frontend/provider/auth_provider.dart';
+import 'package:http/http.dart' as http;
+import 'package:provider/provider.dart';
+import 'package:syncfusion_flutter_charts/charts.dart';
+
+class CombinedFeesPaymentsPage extends StatelessWidget {
+  const CombinedFeesPaymentsPage({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final token = Provider.of<AuthProvider>(context, listen: false).token;
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Fees & Payment Records"),
+        centerTitle: true,
+        automaticallyImplyLeading: false,
+      ),
+      body: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text("Update Fees", style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 10),
+            UpdateFeesContent(token: token!),
+
+            const Divider(thickness: 2, height: 40),
+
+            Text("Payment Records", style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 10),
+            PaymentRecordsContent(token: token),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+//
+// --------------------- UPDATE FEES CONTENT ---------------------
+//
+class UpdateFeesContent extends StatefulWidget {
+  final String token;
+  const UpdateFeesContent({super.key, required this.token});
+
+  @override
+  State<UpdateFeesContent> createState() => _UpdateFeesContentState();
+}
+
+class _UpdateFeesContentState extends State<UpdateFeesContent> {
+  String? selectedClass;
+  List<String> classes = [];
+  final TextEditingController _amountController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    fetchClasses();
+  }
+
+  Future<void> fetchClasses() async {
+    try {
+      final value = await FeesController.getAllClasses(widget.token);
+      setState(() => classes = value);
+    } catch (e) {
+      debugPrint("Error Occurred While fetching classes: $e");
+    }
+  }
+
+  Future<void> fetchFeesForClass(String classId) async {
+    try {
+      final value = await FeesController.getFees(classId, widget.token);
+      setState(() => _amountController.text = value.toString());
+    } catch (e) {
+      debugPrint("Error fetching fees: $e");
+    }
+  }
+
+  Future<void> updateFees() async {
+    try {
+      final value = await FeesController.updateFeesAmountByClassId(
+        selectedClass,
+        _amountController.text,
+        widget.token,
+      );
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(value ? "Successfully Fees Updated" : "Error occurred")),
+      );
+    } catch (e) {
+      debugPrint("Error updating fees: $e");
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        DropdownButton<String>(
+          hint: const Text("Select Class"),
+          value: selectedClass,
+          onChanged: (value) {
+            setState(() => selectedClass = value);
+            if (value != null) fetchFeesForClass(value);
+          },
+          items: classes
+              .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+              .toList(),
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _amountController,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: "Fees Amount",
+            border: OutlineInputBorder(),
+          ),
+        ),
+        const SizedBox(height: 16),
+        ElevatedButton(
+          onPressed: () {
+            if (selectedClass != null && _amountController.text.isNotEmpty) {
+              updateFees();
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Please select a class and enter amount")),
+              );
+            }
+          },
+          child: const Text("Update Fees"),
+        ),
+      ],
+    );
+  }
+}
+
+//
+// --------------------- PAYMENT RECORDS CONTENT ---------------------
+//
+class PaymentRecordsContent extends StatefulWidget {
+  final String token;
+  const PaymentRecordsContent({super.key, required this.token});
+
+  @override
+  State<PaymentRecordsContent> createState() => _PaymentRecordsContentState();
+}
+
+class _PaymentRecordsContentState extends State<PaymentRecordsContent> {
+  static final _baseURL = URL.baseURL;
+
+  String? selectedClass;
+  DateTime selectedDate = DateTime.now();
+  bool loading = false;
+
+  Map<String, int> statusCounts = {'paid': 0, 'pending': 0, 'unpaid': 0};
+  Map<String, List<String>> studentsByStatus = {
+    'paid': [],
+    'pending': [],
+    'unpaid': [],
+  };
+  List<String> classes = [];
+
+  final Map<String, String> _userNameCache = {};
+
+  @override
+  void initState() {
+    super.initState();
+    fetchClasses();
+  }
+
+  void fetchClasses() async {
+    List<String> fetchedClasses = await ClassController.getClasses(widget.token);
+    setState(() {
+      classes = fetchedClasses;
+      if (classes.isNotEmpty) {
+        selectedClass = classes[0];
+        fetchPaymentStatus();
+      }
+    });
+  }
+
+  Future<String> fetchUserNameCached(String userId) async {
+    if (userId.isEmpty) return 'Unknown';
+    if (_userNameCache.containsKey(userId)) {
+      return _userNameCache[userId]!;
+    }
+    try {
+      final url = Uri.parse('$_baseURL/admin/user-name?userId=$userId');
+      final response = await http.get(url, headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ${widget.token}',
+      });
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        String name = data['name'] ?? userId;
+        _userNameCache[userId] = name;
+        return name;
+      } else {
+        return userId;
+      }
+    } catch (e) {
+      debugPrint('Exception fetching username for $userId: $e');
+      return userId;
+    }
+  }
+
+  Future<Map<String, List<String>>> fetchStudentsWithNames(
+      Map<String, List<String>> studentsById) async {
+    final Map<String, List<String>> result = {};
+    for (var status in ['paid', 'pending', 'unpaid']) {
+      List<String> studentIds = studentsById[status] ?? [];
+      List<String> names = [];
+      for (var id in studentIds) {
+        if (id.isNotEmpty) {
+          final name = await fetchUserNameCached(id);
+          names.add(name);
+        }
+      }
+      result[status] = names;
+    }
+    return result;
+  }
+
+  Future<void> fetchPaymentStatus() async {
+    if (selectedClass == null) return;
+
+    setState(() => loading = true);
+
+    final year = selectedDate.year.toString();
+    final monthNumber = selectedDate.month;
+    final monthName = PaymentModel.getMonthName(monthNumber);
+
+    final url = Uri.parse(
+        '$_baseURL/admin/get-status?classId=$selectedClass&year=$year&month=$monthName');
+
+    try {
+      final response = await http.get(url, headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ${widget.token}',
+      });
+
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+
+        final knownStatuses = {'paid', 'pending', 'unpaid'};
+        Map<String, int> counts = {'paid': 0, 'pending': 0, 'unpaid': 0};
+
+        for (final item in data['summary'] ?? []) {
+          String status = (item['status'] as String?) ?? 'unknown';
+          int count = (item['count'] as int?) ?? 0;
+          if (knownStatuses.contains(status)) {
+            counts[status] = count;
+          }
+        }
+
+        Map<String, List<String>> studentsRaw = {
+          'paid': data['studentsByStatus']?['paid'] != null
+              ? (data['studentsByStatus']['paid'] as List).whereType<String>().toList()
+              : [],
+          'pending': data['studentsByStatus']?['pending'] != null
+              ? (data['studentsByStatus']['pending'] as List).whereType<String>().toList()
+              : [],
+          'unpaid': data['studentsByStatus']?['unpaid'] != null
+              ? (data['studentsByStatus']['unpaid'] as List).whereType<String>().toList()
+              : [],
+        };
+
+        final namedStudents = await fetchStudentsWithNames(studentsRaw);
+
+        setState(() {
+          statusCounts['paid'] = counts['paid'] ?? 0;
+          statusCounts['pending'] = counts['pending'] ?? 0;
+          statusCounts['unpaid'] = namedStudents['unpaid']?.length ?? 0;
+          studentsByStatus = namedStudents;
+        });
+      } else {
+        throw Exception('Failed to load payment status');
+      }
+    } catch (e) {
+      debugPrint("Error fetching payment status: $e");
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Error fetching payment data')),
+      );
+    } finally {
+      setState(() => loading = false);
+    }
+  }
+
+  Future<void> pickMonth() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime(selectedDate.year, selectedDate.month, 1),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+      helpText: 'Select month and year',
+    );
+
+    if (picked != null) {
+      setState(() {
+        selectedDate = DateTime(picked.year, picked.month);
+      });
+      await fetchPaymentStatus();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final totalCount = statusCounts.values.fold(0, (sum, val) => sum + val);
+
+    if (classes.isEmpty || loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    return Column(
+      children: [
+        DropdownButton<String>(
+          value: selectedClass,
+          onChanged: (value) {
+            if (value != null) {
+              setState(() => selectedClass = value);
+              fetchPaymentStatus();
+            }
+          },
+          items: classes
+              .map((cls) => DropdownMenuItem(value: cls, child: Text(cls)))
+              .toList(),
+          hint: const Text('Select Class'),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Text('Month: ${selectedDate.year}-${selectedDate.month.toString().padLeft(2, '0')}'),
+            const SizedBox(width: 10),
+            ElevatedButton(onPressed: pickMonth, child: const Text('Select Month')),
+          ],
+        ),
+        const SizedBox(height: 20),
+        if (totalCount > 0)
+          SizedBox(
+            height: 250,
+            child: SfCircularChart(
+              legend: Legend(isVisible: true, overflowMode: LegendItemOverflowMode.wrap),
+              tooltipBehavior: TooltipBehavior(enable: true),
+              series: <PieSeries<StatusData, String>>[
+                PieSeries<StatusData, String>(
+                  dataSource: [
+                    StatusData('Paid', statusCounts['paid'] ?? 0, Colors.green),
+                    StatusData('Pending', statusCounts['pending'] ?? 0, Colors.orange),
+                    StatusData('Unpaid', statusCounts['unpaid'] ?? 0, Colors.red),
+                  ].where((e) => e.count > 0).toList(),
+                  xValueMapper: (StatusData data, _) => data.status,
+                  yValueMapper: (StatusData data, _) => data.count,
+                  pointColorMapper: (StatusData data, _) => data.color,
+                  dataLabelMapper: (StatusData data, _) => '${data.status}: ${data.count}',
+                  dataLabelSettings: const DataLabelSettings(isVisible: true),
+                  enableTooltip: true,
+                ),
+              ],
+            ),
+          )
+        else
+          const Text('No payment data for this month and class'),
+        const SizedBox(height: 20),
+        buildStudentList('Paid Students', studentsByStatus['paid']!),
+        buildStudentList('Pending Students', studentsByStatus['pending']!),
+        buildStudentList('Unpaid Students', studentsByStatus['unpaid']!),
+      ],
+    );
+  }
+
+  Widget buildStudentList(String title, List<String> students) {
+    return ExpansionTile(
+      title: Text('$title (${students.length})'),
+      children: students.isEmpty
+          ? [const ListTile(title: Text('No students'))]
+          : students.map((name) => ListTile(title: Text(name))).toList(),
+    );
+  }
+}
+
+class StatusData {
+  final String status;
+  final int count;
+  final Color color;
+
+  StatusData(this.status, this.count, this.color);
+}

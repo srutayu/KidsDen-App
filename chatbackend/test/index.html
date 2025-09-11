@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>School Chat Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 2em auto;
+      padding: 1em;
+      background: #f7f7f7;
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 1em;
+    }
+    label {
+      display: block;
+      margin-top: 1em;
+    }
+    select, input[type="text"], button {
+      margin-top: 0.25em;
+      padding: 0.5em;
+      width: 100%;
+      box-sizing: border-box;
+      font-size: 1em;
+    }
+    #chatLog {
+      margin-top: 1em;
+      height: 300px;
+      overflow-y: auto;
+      background: white;
+      border: 1px solid #ccc;
+      padding: 1em;
+      white-space: pre-wrap;
+      font-family: monospace;
+    }
+    #messageInput {
+      margin-top: 1em;
+      display: flex;
+    }
+    #messageInput input[type="text"] {
+      flex: 1;
+      margin-right: 0.5em;
+    }
+  </style>
+</head>
+<body>
+  <h1>School Chat Test</h1>
+
+  <label for="roleSelect">Select Role</label>
+  <select id="roleSelect">
+    <option value="student">Student</option>
+    <option value="teacher">Teacher</option>
+    <option value ="teacher2">Teacher 2</option>
+    <option value="admin">Admin</option>
+  </select>
+
+  <label for="classIdInput">Enter Class ID</label>
+  <input id="classIdInput" type="text" placeholder="Enter classId here" />
+
+  <button id="connectBtn">Connect</button>
+
+  <div id="chatLog"></div>
+
+  <div id="messageInput" style="display:none;">
+    <input id="messageText" type="text" placeholder="Type your message here" />
+    <button id="sendBtn">Send</button>
+  </div>
+
+  <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+  <script>
+    const tokens = {
+  student: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4YTk3YzhiOTgzMzdlNDJlZTI5OTU2MCIsInJvbGUiOiJzdHVkZW50IiwiaWF0IjoxNzU2NjIwOTAwLCJleHAiOjE3NTkyMTI5MDB9.AiPQbnYLgW-qniVoB1Yej_Ir-wpDqm5XbfJa4A4x0XA', // Replace with real ones
+  teacher: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4YTk3YzZjOTgzMzdlNDJlZTI5OTU1YSIsInJvbGUiOiJ0ZWFjaGVyIiwiaWF0IjoxNzU2NjIwOTMzLCJleHAiOjE3NTkyMTI5MzN9.8XIdZNt6vkSetXriOzxPVrArrvG29FVU26muiP4Rxns',
+  teacher2: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4YTk3Yzc1OTgzMzdlNDJlZTI5OTU1ZCIsInJvbGUiOiJ0ZWFjaGVyIiwiaWF0IjoxNzU2NjQ3MTA0LCJleHAiOjE3NTkyMzkxMDR9.jUUieKwzZJ6_nVwQbwvNrsMOC80Kx1y4oTPzlL9cQRM',
+  admin:   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY4YTk3YmRmN2NlNmM2MzlkMjhhOTE2YyIsInJvbGUiOiJhZG1pbiIsImlhdCI6MTc1NjYyMDg2NiwiZXhwIjoxNzU5MjEyODY2fQ.gPE1wwrtjXfgAXX2RHarNky1q7APotxtLvIsa6ju1Qc'
+};
+
+    let socket = null;
+
+    const connectBtn = document.getElementById('connectBtn');
+    const sendBtn = document.getElementById('sendBtn');
+    const chatLog = document.getElementById('chatLog');
+    const roleSelect = document.getElementById('roleSelect');
+    const classIdInput = document.getElementById('classIdInput');
+    const messageInputDiv = document.getElementById('messageInput');
+    const messageText = document.getElementById('messageText');
+
+    function logMessage(msg) {
+      chatLog.textContent += msg + '\n';
+      chatLog.scrollTop = chatLog.scrollHeight;
+    }
+
+    connectBtn.onclick = () => {
+      const role = roleSelect.value;
+      const token = tokens[role];
+      const classId = classIdInput.value.trim();
+
+      if (!classId) {
+        alert('Please enter a class ID');
+        return;
+      }
+
+      if (socket) {
+        socket.disconnect();
+        socket = null;
+        logMessage('Disconnected from server\n');
+      }
+      
+      logMessage(`Connecting as ${role} to class ${classId}...`);
+
+      socket = io('http://localhost:8000', {
+        auth: { token }
+      });
+
+      socket.on('connect', () => {
+        logMessage('Connected!');
+        messageInputDiv.style.display = 'flex';
+      });
+
+      socket.on('disconnect', () => {
+        logMessage('Disconnected from server');
+        messageInputDiv.style.display = 'none';
+      });
+
+      socket.on('connect_error', (err) => {
+        logMessage('Connection error: ' + err.message);
+        messageInputDiv.style.display = 'none';
+      });
+
+      socket.on('message', (data) => {
+        console.log('Incoming message:', data);  // Debug log to verify what arrives
+
+        if (data.classId && data.classId.toString() === classId.toString()) {
+            logMessage(`[Received] ${data.message}`);
+        }
+        });
+
+      sendBtn.onclick = () => {
+        const msg = messageText.value.trim();
+        if (!msg) return;
+        socket.emit('message', { classId, message: msg });
+        logMessage(`[Sent] ${msg}`);
+        messageText.value = '';
+      };
+    };
+  </script>
+</body>
+</html>
