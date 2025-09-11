@@ -3,6 +3,7 @@ const Payment = require("../models/paymentModel");
 const User = require("../models/userModel");
 const {sendPaymentConfirmationEmail} = require("../services/emailServices");
 const Fees = require("../models/feesModel");
+const Class = require("../models/classModel");
 
 const crypto = require("crypto");
 
@@ -192,8 +193,11 @@ exports.getMonthsByYear = async (req, res) => {
 //Get the list of all classes from fees collection
 exports.getClass = async (req, res) => {
   try {
-    const classes = await Payment.distinct('classId');
-    res.status(200).json({ classes });
+    // Get all unique class names
+    const classes = await Class.find().select('name').lean();
+    // Extract unique names
+    const uniqueNames = [...new Set(classes.map(cls => cls.name))];
+    res.status(200).json({ classes: uniqueNames });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Could not retrieve classes' });
