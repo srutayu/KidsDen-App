@@ -12,22 +12,11 @@ class SignUpPage extends StatefulWidget {
 }
 
 class _SignUpPageState extends State<SignUpPage> {
+  bool _isLoading = false;
   final TextEditingController _email = TextEditingController();
   final TextEditingController _password = TextEditingController();
   final TextEditingController _confirmPasswordController = TextEditingController();
   final TextEditingController _name = TextEditingController();
-  // String _selectedRole = "student";
-  
-
-  // final List<String> _roles = ['student', 'teacher'];
-
-  // void onRoleChange(String? value) {
-  //   if (value != null) {
-  //     setState(() {
-  //       _selectedRole = value;
-  //     });
-  //   }
-  // }
 
   @override
   void initState() {
@@ -205,56 +194,82 @@ class _SignUpPageState extends State<SignUpPage> {
                             height: 10,
                           ),
                           SizedBox(
-                            width: double.infinity,
-                            child: FilledButton(
-                                onPressed: () async {
-                                  if (_name.text.isEmpty){
-                                    Fluttertoast.showToast(msg: 'Name Required');
-                                    return;
-                                  }
-                                  else if (_email.text.isEmpty){
-                                    Fluttertoast.showToast(msg: 'Email Required');
-                                    return;
-                                  }  
-                                  else if (!isEmailValid){
-                                    Fluttertoast.showToast(msg: 'Invalid Email');
-                                    return;
-                                  }                                
-                                  else if (_password.text.isEmpty){
-                                    Fluttertoast.showToast(msg: 'Password Required');
-                                    return;
-                                  }
-                                  else if (!isMatch || !isLengthValid){
-                                    Fluttertoast.showToast(msg: 'Password Criteria not met');
-                                    return;
-                                  }
-                                  
-                                  try {
-                                    await AuthController.register(
-                                      _name.text,
-                                      _email.text,
-                                      _password.text,
-                                      _selectedRole,
-                                    );
+                                  width: double.infinity,
+                                  child: FilledButton(
+                                    onPressed: _isLoading
+                                        ? null
+                                        : () async {
+                                            if (_name.text.isEmpty) {
+                                              Fluttertoast.showToast(
+                                                  msg: 'Name Required');
+                                              return;
+                                            } else if (_email.text.isEmpty) {
+                                              Fluttertoast.showToast(
+                                                  msg: 'Email Required');
+                                              return;
+                                            } else if (!isEmailValid) {
+                                              Fluttertoast.showToast(
+                                                  msg: 'Invalid Email');
+                                              return;
+                                            } else if (_password.text.isEmpty) {
+                                              Fluttertoast.showToast(
+                                                  msg: 'Password Required');
+                                              return;
+                                            } else if (!isMatch ||
+                                                !isLengthValid) {
+                                              Fluttertoast.showToast(
+                                                  msg:
+                                                      'Password Criteria not met');
+                                              return;
+                                            }
 
-                                    Navigator.pushReplacement(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) => ApprovalPending(),
-                                      ),
-                                    );
-                                  } catch (error) {
-                                    Fluttertoast.showToast(
-                                      msg: error.toString().replaceFirst(
-                                                "Exception: ", ""),
-                                            toastLength: Toast.LENGTH_SHORT,
-                                            gravity: ToastGravity.BOTTOM,
-                                            textColor: Colors.white,
-                                            fontSize: 16.0,
-                                          );
-                                        }
-                                      },
-                                      child: Text('Sign Up')),
+                                            setState(() => _isLoading = true);
+
+                                            try {
+                                              await AuthController.register(
+                                                _name.text,
+                                                _email.text,
+                                                _password.text,
+                                                _selectedRole,
+                                              );
+
+                                              if (!mounted) return;
+
+                                              Navigator.pushReplacement(
+                                                context,
+                                                MaterialPageRoute(
+                                                    builder: (context) =>
+                                                        ApprovalPending()),
+                                              );
+                                            } catch (error) {
+                                              Fluttertoast.showToast(
+                                                msg: error
+                                                    .toString()
+                                                    .replaceFirst(
+                                                        "Exception: ", ""),
+                                                toastLength: Toast.LENGTH_SHORT,
+                                                gravity: ToastGravity.BOTTOM,
+                                                textColor: Colors.white,
+                                                fontSize: 16.0,
+                                              );
+                                            } finally {
+                                              if (mounted) {
+                                                setState(
+                                                    () => _isLoading = false);
+                                              }
+                                            }
+                                          },
+                                    child: _isLoading
+                                        ? const SizedBox(
+                                            height: 20,
+                                            width: 20,
+                                            child: CircularProgressIndicator(
+                                              color: Colors.white,
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : const Text("Register"),
+                                  ),
                                 ),
                                 SizedBox(height: 20),
                                 Row(
@@ -282,7 +297,6 @@ class _SignUpPageState extends State<SignUpPage> {
                                   ],
                                 ),
                               ],
-                            ))))))
-                );
+                            )))))));
   }
 }

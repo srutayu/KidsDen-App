@@ -28,9 +28,7 @@ class _BroadcastScreenState extends State<BroadcastScreen> {
   }
 
   Future<void> fetchClasses() async {
-    final url = widget.userRole == 'admin'
-        ? 'http://192.168.0.131:8000/api/classes/get-classes'
-        : 'http://192.168.0.131:8000/api/classes/get-my-classes'; // Update endpoints
+    final url = 'http://192.168.0.131:8000/api/classes/get-classes';  // Update endpoints
     final res = await http.get(
       Uri.parse(url),
       headers: {'Authorization': 'Bearer ${widget.authToken}'},
