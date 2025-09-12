@@ -126,17 +126,17 @@ class _LoginPageState extends State<LoginPage> {
                           if (role == 'admin') {
                             Navigator.pushReplacement(
                               context,
-                              MaterialPageRoute(builder: (_) => AdminPage(username: username, role: role!)),
+                              MaterialPageRoute(builder: (_) => AdminPage()),
                             );
                           } else if (role == 'teacher') {
                             Navigator.pushReplacement(
                               context,
-                              MaterialPageRoute(builder: (_) => TeacherPage(username: username, role: role!)),
+                              MaterialPageRoute(builder: (_) => TeacherPage()),
                             );
                           } else if (role == 'student') {
                             Navigator.pushReplacement(
                               context,
-                              MaterialPageRoute(builder: (_) => StudentPage(username: username, role: role!)),
+                              MaterialPageRoute(builder: (_) => StudentPage()),
                             );
                           }
                         } catch (e) {

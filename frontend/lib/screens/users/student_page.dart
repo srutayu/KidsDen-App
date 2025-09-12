@@ -8,9 +8,7 @@ import 'package:frontend/screens/student/payment_page.dart';
 import 'package:provider/provider.dart';
 
 class StudentPage extends StatefulWidget {
-  final String username;
-  final String role;
-  const StudentPage({super.key, required this.username, required this.role});
+  const StudentPage({super.key });
 
   @override
   State<StudentPage> createState() => _StudentPageState();
@@ -72,7 +70,7 @@ class _StudentPageState extends State<StudentPage> {
           ],
         ),
       ),
-        body: ClassListScreen(authToken: token!, username: widget.username, role: widget.role)
+        body: ClassListScreen(authToken: token!)
     );
   }
 }
