@@ -6,14 +6,11 @@ import 'package:frontend/screens/auth/onboarding_page.dart';
 import 'package:provider/provider.dart';
 
 void main() {
-  runApp(
-     MultiProvider(providers: [
-       ChangeNotifierProvider(create: (_) => AuthProvider()),
-       ChangeNotifierProvider(create: (_) => UserProvider()),
-        ChangeNotifierProvider(create: (_) => ThemeProvider()),
-     ],
-         child: MyApp())
-  );
+  runApp(MultiProvider(providers: [
+    ChangeNotifierProvider(create: (_) => AuthProvider()),
+    ChangeNotifierProvider(create: (_) => UserProvider()),
+    ChangeNotifierProvider(create: (_) => ThemeProvider()),
+  ], child: MyApp()));
 }
 
 class MyApp extends StatelessWidget {

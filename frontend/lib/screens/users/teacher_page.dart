@@ -71,7 +71,7 @@ class _TeacherPageState extends State<TeacherPage> {
             ],
           ),
         ),
-        // body: ClassListScreen(authToken: token!)
+        body: ClassListScreen(username: widget.username, authToken: token!, role: widget.role,)
     );
   }
 }
