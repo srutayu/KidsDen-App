@@ -15,9 +15,9 @@ import 'package:frontend/screens/widgets/greetingWidget.dart';
 
 
 class AdminPage extends StatefulWidget {
-  final String username;
-  final String role;
-  const AdminPage({required this.username, super.key, required this.role});
+  // final String username;
+  // final String role;
+  const AdminPage({ super.key });
 
   @override
   State<AdminPage> createState() => _AdminPageState();
@@ -34,7 +34,7 @@ class _AdminPageState extends State<AdminPage> {
     super.initState();
     
     _pages=[
-      ClassListScreen(authToken: token, username: widget.username, role: widget.role),
+      ClassListScreen(authToken: token),
       ClassroomDetails(),
       MemberRequest(),
       CombinedFeesPaymentsPage()

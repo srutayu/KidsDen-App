@@ -4,15 +4,14 @@ import 'package:frontend/models/classroom_model.dart';
 import 'package:frontend/provider/auth_provider.dart';
 import 'package:frontend/provider/user_data_provider.dart';
 import 'package:frontend/screens/auth/onboarding_page.dart';
+import 'package:frontend/screens/chat/classlist.dart';
 import 'package:frontend/screens/teacher/classroom_details.dart';
 import 'package:provider/provider.dart';
 
-import '../chat/classlist.dart';
+// import '../chat/classlist.dart';
 
 class TeacherPage extends StatefulWidget {
-  final String role;
-  final String username;
-  const TeacherPage({super.key, required this.role, required this.username});
+  const TeacherPage({super.key});
 
   @override
   State<TeacherPage> createState() => _TeacherPageState();
@@ -21,7 +20,6 @@ class TeacherPage extends StatefulWidget {
 class _TeacherPageState extends State<TeacherPage> {
   late final token = Provider.of<AuthProvider>(context, listen:false).token;
   late final userId = Provider.of<UserProvider>(context, listen: false).user!.id;
-
 
   @override
   Widget build(BuildContext context) {
@@ -71,7 +69,7 @@ class _TeacherPageState extends State<TeacherPage> {
             ],
           ),
         ),
-        body: ClassListScreen(username: widget.username, authToken: token!, role: widget.role,)
+        body: ClassListScreen(authToken: token!),
     );
   }
 }

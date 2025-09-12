@@ -8,10 +8,8 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 class ClassListScreen extends StatefulWidget {
-  final String authToken; // Pass auth token here
-  final String username;
-  final String role;
-  ClassListScreen({required this.authToken, required this.username, required this.role});
+  final String authToken; 
+  ClassListScreen({required this.authToken});
 
   @override
   _ClassListScreenState createState() => _ClassListScreenState();
@@ -23,6 +21,8 @@ class _ClassListScreenState extends State<ClassListScreen> {
 
   late String userId = Provider.of<UserProvider>(context, listen: false).user!.id;
   late String role = Provider.of<UserProvider>(context, listen: false).user!.role;
+  late final String username = Provider.of<UserProvider>(context, listen: false).user!.name;
+
 
   @override
   void initState() {
@@ -82,7 +82,7 @@ class _ClassListScreenState extends State<ClassListScreen> {
             ? Center(child: CircularProgressIndicator())
             : Column(
                 children: [
-                  GreetingWidget(username: widget.username),
+                  GreetingWidget(username: username),
                   Padding(
                     padding: const EdgeInsets.all(8.0),
                     child: Row(
