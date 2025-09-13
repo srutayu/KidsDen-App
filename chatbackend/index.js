@@ -97,9 +97,10 @@ io.on('connection', async (socket) => {
   socket.on('message', async (data) => {
     if (canSendMessage(user, data.classId)) {
         setupRedisSubscriber(user, socket, data, io);
+        console.log(data.sender);
     //   console.log('Message sent to class:', data.message);
-      await pub.publish('chatMessages', JSON.stringify({ classId: data.classId, message: data.message, sender: user.user._id.toString(), senderRole: user.role }));
-      await produceMessage(data, user.user._id.toString());
+      await pub.publish('chatMessages', JSON.stringify({ classId: data.classId, message: data.message, sender: data.sender, senderRole: user.role }));
+      await produceMessage(data, data.sender);
     //   console.log('Message produced to Kafka:', data.message);
     //   await saveMessageToDB({ classId: data.classId, sender: user.user._id.toString(), content: data.message });
     //   console.log('Message processed for class:', data.classId, 'by user:', user.user._id.toString(), 'with role:', user.role);

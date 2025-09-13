@@ -29,8 +29,8 @@ class _ChatScreenState extends State<ChatScreen> {
   // Cache: userId -> userName
   Map<String, String> userNamesCache = {};
 
-  // Store current logged-in userId and role to detect own messages and permissions
-  String? currentUserId;
+  // Current logged-in userId
+  late final currentUserId = Provider.of<UserProvider>(context, listen: false).user?.id;
   String? currentUserRole;
 
   @override
@@ -40,18 +40,18 @@ class _ChatScreenState extends State<ChatScreen> {
     fetchOldMessages();
     initSocket();
   }
-  late String userId = Provider.of<UserProvider>(context, listen: false).user!.id;
 
   Future<void> fetchCurrentUserDetails() async {
+  if (currentUserId == null) return;
     try {
       final res = await http.get(
-        Uri.parse('http://192.168.0.131:8000/api/classes/get-user-role?userId=$userId'),
+        Uri.parse(
+            'http://192.168.0.131:8000/api/classes/get-user-role?userId=$currentUserId'),
         headers: {'Authorization': 'Bearer ${widget.authToken}'},
       );
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
         setState(() {
-          currentUserId = data['_id'] ?? data['id'];
           currentUserRole = data['role'];
         });
       }
@@ -105,20 +105,24 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
-  void sendMessage(String msg) {
-    if (msg.trim().isEmpty) return;
+ void sendMessage(String msg) {
+  if (msg.trim().isEmpty) return;
+  if (currentUserId == null) return;
+  socket.emit('message', {
+    'classId': widget.classId,
+    'message': msg,
+    'sender': currentUserId,
+  });
 
-    socket.emit('message', {
-      'classId': widget.classId,
-      'message': msg,
+  setState(() {
+    messages.add({
+      'content': msg,
+      'sender': currentUserId, 
     });
+  });
 
-    setState(() {
-      messages.add({'content': msg, 'sender': 'me'});
-    });
-
-    _controller.clear();
-  }
+  _controller.clear();
+}
 
   void sendTyping(bool typing) {
     socket.emit('typing', {
@@ -128,11 +132,11 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   Future<void> loadUserNameIfNeeded(String userId) async {
-    if (userId.isEmpty || userId == 'me' || userNamesCache.containsKey(userId)) return;
-
+    if (userId.isEmpty || userNamesCache.containsKey(userId)) return;
     try {
       final response = await http.get(
-        Uri.parse('http://192.168.0.131:8000/api/classes/get-user-name?userId=$userId'),
+        Uri.parse(
+            'http://192.168.0.131:8000/api/classes/get-user-name?userId=$userId'),
         headers: {
           'Authorization': 'Bearer ${widget.authToken}',
           'Content-Type': 'application/json',
@@ -161,23 +165,22 @@ class _ChatScreenState extends State<ChatScreen> {
   String getInitials(String name) {
     if (name.isEmpty) return '?';
     final parts = name.split(' ');
-    // if (parts.length == 1) return parts[0][0].toUpperCase();
-    // return (parts[0][0] + parts[1][0]).toUpperCase();
-    return parts[0];
+    return parts[0]; // keep it simple
   }
 
   Widget buildMessage(Map msg) {
-    final senderId = msg['sender'] == 'me' ? 'me' : (msg['sender'] ?? '');
-    if (senderId != 'me' && senderId.isNotEmpty) {
-      loadUserNameIfNeeded(senderId); // async fetch username if needed
-    }
-    final senderName = senderId == 'me'
-        ? 'You'
-        : (userNamesCache[senderId] ?? '?'); // Use cached or placeholder
-    final initials = getInitials(senderName);
+    final currentUserId =
+        Provider.of<UserProvider>(context, listen: false).user?.id;
+    final senderId = msg['sender'] ?? '';
 
-    final bool isMe = senderId == 'me' || senderId == currentUserId;
+  if (senderId.isNotEmpty) {
+    loadUserNameIfNeeded(senderId);
+  }
 
+  final senderName = userNamesCache[senderId] ?? '?';
+  final initials = getInitials(senderName);
+
+  final bool isMe = currentUserId != null && senderId == currentUserId;
     return Align(
       alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
@@ -193,7 +196,8 @@ class _ChatScreenState extends State<ChatScreen> {
             Text(msg['content'] ?? msg['message'] ?? '',
                 style: TextStyle(fontSize: 16)),
             SizedBox(height: 4),
-            Text(initials, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+            Text(initials,
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
           ],
         ),
       ),
@@ -209,56 +213,57 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: Text(widget.className)),
-    body: Column(
-      children: [
-        Expanded(
-          child: ListView.builder(
-            reverse: true,
-            itemCount: messages.length,
-            itemBuilder: (_, i) => buildMessage(messages[messages.length - 1 - i]),
-          ),
-        ),
-        if (isTyping)
-          Padding(
-            padding: EdgeInsets.all(8),
-            child: Text('Someone is typing...',
-                style: TextStyle(fontStyle: FontStyle.italic)),
-          ),
-        // Disable message input for students
-        if (currentUserRole != 'student')
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            child: Row(
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _controller,
-                    onChanged: (val) => sendTyping(val.isNotEmpty),
-                    decoration: InputDecoration(
-                      hintText: 'Type a message',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(16),
+        appBar: AppBar(title: Text(widget.className)),
+        body: Column(
+          children: [
+            Expanded(
+              child: ListView.builder(
+                reverse: true,
+                itemCount: messages.length,
+                itemBuilder: (_, i) =>
+                    buildMessage(messages[messages.length - 1 - i]),
+              ),
+            ),
+            if (isTyping)
+              Padding(
+                padding: EdgeInsets.all(8),
+                child: Text('Someone is typing...',
+                    style: TextStyle(fontStyle: FontStyle.italic)),
+              ),
+            if (currentUserRole != 'student')
+              Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _controller,
+                        onChanged: (val) => sendTyping(val.isNotEmpty),
+                        decoration: InputDecoration(
+                          hintText: 'Type a message',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
+                    IconButton(
+                      icon: Icon(Icons.send),
+                      onPressed: () => sendMessage(_controller.text),
+                    ),
+                  ],
                 ),
-                IconButton(
-                  icon: Icon(Icons.send),
-                  onPressed: () => sendMessage(_controller.text),
+              )
+            else
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text(
+                  'You do not have permission to send messages.',
+                  style: TextStyle(color: Colors.grey),
                 ),
-              ],
-            ),
-          )
-        else
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              'You do not have permission to send messages.',
-              style: TextStyle(color: Colors.grey),
-            ),
-          ),
-      ],
-    ),
-  );
+              ),
+          ],
+        ),
+      );
 }
