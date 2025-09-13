@@ -5,7 +5,7 @@ const cors = require('cors');
 const errorHandler = require('./middleware/errorHandler');
 const connectDB = require('./config/db');
 const http = require('http');
-const { authenticate, canSendMessage } = require('./controllers/chatController');
+const { authenticate, canSendMessage, saveMessageToDB } = require('./controllers/chatController');
 const { pub, sub } = require('./config/redisClient');
 const {produceMessage, startConsumer} = require('./kafka/producer');
 const { start } = require('repl');
@@ -41,27 +41,33 @@ app.use('/api/classes', require('./routes/classRoutes'));
 const socketRoles = new Map();
 sub.subscribe('chatMessages');
 
-sub.on('message', (channel, message) => {
-  if (channel === 'chatMessages') {
-    const data = JSON.parse(message);
+function setupRedisSubscriber(user, socket, data, io) {
+
+  sub.on('message', (channel, message) => {
     const room = `class_${data.classId}`;
-    const clients = io.sockets.adapter.rooms.get(room);
-    if (clients) {
-      clients.forEach(socketId => {
-        const role = socketRoles.get(socketId);
-        // Only emit to sockets with a different role than sender
-        if (role && role !== data.senderRole && socketId !== data.sender) {
-          io.to(socketId).emit('message', {
-            classId: data.classId,
-            message: data.message,
-            sender: data.sender,
-            senderRole: data.senderRole
-          });
-        }
-      });
-    }
-  }
-});
+      const clients = io.sockets.adapter.rooms.get(room);
+    
+      if (clients) {
+        // Emit message only to sockets with different roles except sender's socket
+        console.log("Messsage received from Redis:", data.message);
+        clients.forEach(socketId => {
+          if (socketId !== socket.id) {
+            const role = socketRoles.get(socketId);
+            if (role && role !== user.role) {
+              io.to(socketId).emit('message', {
+                classId: data.classId,
+                message: data.message,
+                sender: user.user._id.toString(),
+                senderRole: user.role
+              });
+            }
+          }
+        });
+      }
+  });
+}
+
+// Call the function after io is defined
 
 io.on('connection', async (socket) => {
   const user = await authenticate(socket);
@@ -71,7 +77,7 @@ io.on('connection', async (socket) => {
     return;
   }
 
-  console.log('User connected:', user.user._id.toString());
+//   console.log('User connected:', user.user._id.toString());
 
   // Store user role for this socket
   socketRoles.set(socket.id, user.role);
@@ -87,10 +93,12 @@ io.on('connection', async (socket) => {
     socket.disconnect();
     return;
   }
-  
+
   socket.on('message', async (data) => {
     if (canSendMessage(user, data.classId)) {
-        // console.log('Message sent to class:', data.message);
+        setupRedisSubscriber(user, socket, data, io);
+        console.log(data.sender);
+    //   console.log('Message sent to class:', data.message);
       await pub.publish('chatMessages', JSON.stringify({ classId: data.classId, message: data.message, sender: data.sender, senderRole: user.role }));
       await produceMessage(data, data.sender);
     //   console.log('Message produced to Kafka:', data.message);
