@@ -15,62 +15,65 @@ class StudentPage extends StatefulWidget {
 }
 
 class _StudentPageState extends State<StudentPage> {
-  late final token = Provider.of<AuthProvider>(context, listen:false).token;
+  late final token = Provider.of<AuthProvider>(context, listen:false).token!;
   late final userId = Provider.of<UserProvider>(context, listen: false).user!.id;
+  int selectedIndex=0;
+  late List<Widget> _pages;
+
+  @override
+  void initState() {
+    super.initState();
+    
+    _pages=[
+      ClassListScreen(authToken: token),
+      PaymentPage()
+    ];
+  }
 
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text("Student Page"),
-      ),
-      drawer: Drawer(
-        child: Column(
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                SizedBox(width: 10,),
-                DrawerHeader(padding: EdgeInsets.only(top: 40),child: Text("Menu",style: TextStyle(fontSize: 35, fontWeight: FontWeight.bold),),),
-                IconButton(onPressed: (){
-                  // print(token);
-                  AuthController.logout(token!).then((value) {
-                    if(value) {
-                      Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) {
-                        return OnboardingPage();
-                      },));
-                    }
-                    else {
-                      print("Logout Failed");
-                    }
-                  },).catchError((error){
-                    print("Logout Error : $error");
-                  });
-                }, icon: Icon(Icons.logout))
-              ],
-            ),
-            GestureDetector(
-              onTap: (){
-                Navigator.push(context, MaterialPageRoute(builder: (context) {
-                  return PaymentPage();
-                },));
+    return Scaffold(appBar: AppBar(
+        backgroundColor: const Color.fromARGB(255, 52, 161, 88),
+        title: Text('Student Dashboard'),
+        centerTitle: true,
+        automaticallyImplyLeading: false,
+        actions: [
+          IconButton(
+              onPressed: () async {
+                try {
+                  final value = await AuthController.logout(token);
+                  if (value) {
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => OnboardingPage(),
+                      ),
+                    );
+                  } else {
+                    print("Logout Failed");
+                  }
+                } catch (error) {
+                  print("Logout Error: $error");
+                }
               },
-              child: Padding(
-                padding: const EdgeInsets.all(20.0),
-                child: Row(
-                  children: [
-                    Text("Make Payment", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),),
-                    SizedBox(width: 10,),
-                    Icon(Icons.payment_outlined)
-                  ],
-                ),
-              ),
-            )
-          ],
-        ),
+              icon: Icon(Icons.logout))
+        ],
       ),
-        body: ClassListScreen(authToken: token!)
+      body:_pages[selectedIndex],
+      bottomNavigationBar: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
+        onTap: (index) {
+          setState(() {
+            selectedIndex=index; 
+          });
+        },
+        currentIndex: selectedIndex,
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Chat'),
+          BottomNavigationBarItem(icon: Icon(Icons.room), label: 'Classes'),
+        ],
+      ),
     );
   }
 }
