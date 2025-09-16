@@ -356,6 +356,7 @@ class _ClassroomDetailsState extends State<ClassroomDetails> {
 
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: const Text('Classroom Details'),
         actions: [
           IconButton(
