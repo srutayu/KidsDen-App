@@ -7,7 +7,6 @@ import 'package:frontend/screens/chat/classlist.dart';
 import 'package:frontend/screens/teacher/classroom_details.dart';
 import 'package:provider/provider.dart';
 
-
 class TeacherPage extends StatefulWidget {
   const TeacherPage({super.key});
 
@@ -16,59 +15,66 @@ class TeacherPage extends StatefulWidget {
 }
 
 class _TeacherPageState extends State<TeacherPage> {
-  late final token = Provider.of<AuthProvider>(context, listen:false).token;
-  late final userId = Provider.of<UserProvider>(context, listen: false).user!.id;
+  late final token = Provider.of<AuthProvider>(context, listen: false).token!;
+  late final userId =
+      Provider.of<UserProvider>(context, listen: false).user!.id;
+
+  int selectedIndex = 0;
+  late List<Widget> _pages;
+
+  @override
+  void initState() {
+    super.initState();
+    _pages = [
+      ClassListScreen(authToken: token),
+      ClassroomDetailsTeacher(),
+    ];
+  }
+
+  void onItemTapped(int index) {
+    setState(() {
+      selectedIndex = index;
+    });
+  }
+
+  Future<void> logout() async {
+    try {
+      final value = await AuthController.logout(token);
+      if (value) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => OnboardingPage()),
+        );
+      } else {
+        print("Logout Failed");
+      }
+    } catch (error) {
+      print("Logout Error: $error");
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text("Teachers Page"),),
-        drawer: Drawer(
-          child: Column(
-            children: [
-              Row(
-                children: [
-                  DrawerHeader(padding: EdgeInsets.only(top: 40),child: Text("Menu",style: TextStyle(fontSize: 35, fontWeight: FontWeight.bold),),),
-                  SizedBox(width: 30,),
-                  IconButton(onPressed: (){
-                  // print(token);
-                    AuthController.logout(token!).then((value) {
-                    if(value) {
-                    Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) {
-                    return OnboardingPage();
-                    },));
-                    }
-                    else {
-                    print("Logout Failed");
-                    }
-                    },).catchError((error){
-                    print("Logout Error : $error");
-                    });
-                  }, icon: Icon(Icons.logout))
-                ],
-              ),
-              GestureDetector(
-                onTap: (){
-                  Navigator.push(context, MaterialPageRoute(builder: (context) {
-                    return ClassroomDetailsTeacher();
-                  },));
-                },
-                child: Padding(
-                  padding: const EdgeInsets.all(20.0),
-                  child: Row(
-                    children: [
-                      Text("Classroom Details", style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),),
-                      SizedBox(width: 10,),
-                      Icon(Icons.school)
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        body: ClassListScreen(authToken: token!),
+      appBar: AppBar(
+        title: const Text("Teacher Dashboard"),
+        centerTitle: true,
+        automaticallyImplyLeading: false,
+        backgroundColor: const Color.fromARGB(255, 52, 161, 88),
+        actions: [
+          IconButton(onPressed: logout, icon: const Icon(Icons.logout)),
+        ],
+      ),
+      body: _pages[selectedIndex],
+      bottomNavigationBar: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
+        currentIndex: selectedIndex,
+        onTap: onItemTapped,
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Class Chats'),
+          BottomNavigationBarItem(icon: Icon(Icons.school), label: 'Students'),
+        ],
+      ),
     );
   }
 }
-

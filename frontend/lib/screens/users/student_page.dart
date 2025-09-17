@@ -8,32 +8,30 @@ import 'package:frontend/screens/student/payment_page.dart';
 import 'package:provider/provider.dart';
 
 class StudentPage extends StatefulWidget {
-  const StudentPage({super.key });
+  const StudentPage({super.key});
 
   @override
   State<StudentPage> createState() => _StudentPageState();
 }
 
 class _StudentPageState extends State<StudentPage> {
-  late final token = Provider.of<AuthProvider>(context, listen:false).token!;
-  late final userId = Provider.of<UserProvider>(context, listen: false).user!.id;
-  int selectedIndex=0;
+  late final token = Provider.of<AuthProvider>(context, listen: false).token!;
+  late final userId =
+      Provider.of<UserProvider>(context, listen: false).user!.id;
+  int selectedIndex = 0;
   late List<Widget> _pages;
 
   @override
   void initState() {
     super.initState();
-    
-    _pages=[
-      ClassListScreen(authToken: token),
-      PaymentPage()
-    ];
-  }
 
+    _pages = [ClassListScreen(authToken: token), PaymentPage()];
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(appBar: AppBar(
+    return Scaffold(
+      appBar: AppBar(
         backgroundColor: const Color.fromARGB(255, 52, 161, 88),
         title: Text('Student Dashboard'),
         centerTitle: true,
@@ -60,18 +58,18 @@ class _StudentPageState extends State<StudentPage> {
               icon: Icon(Icons.logout))
         ],
       ),
-      body:_pages[selectedIndex],
+      body: _pages[selectedIndex],
       bottomNavigationBar: BottomNavigationBar(
         type: BottomNavigationBarType.fixed,
         onTap: (index) {
           setState(() {
-            selectedIndex=index; 
+            selectedIndex = index;
           });
         },
         currentIndex: selectedIndex,
         items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Chat'),
-          BottomNavigationBarItem(icon: Icon(Icons.payment), label: 'Classes'),
+          BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Class Chat'),
+          BottomNavigationBarItem(icon: Icon(Icons.payment), label: 'Pay Fees'),
         ],
       ),
     );
