@@ -71,7 +71,7 @@ class _StudentPageState extends State<StudentPage> {
         currentIndex: selectedIndex,
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Chat'),
-          BottomNavigationBarItem(icon: Icon(Icons.room), label: 'Classes'),
+          BottomNavigationBarItem(icon: Icon(Icons.payment), label: 'Classes'),
         ],
       ),
     );
