@@ -44,6 +44,7 @@ if (cluster.isMaster) {
     app.use('/api/fees', require('./routes/feesRoutes'));
     app.use('/api/class', require('./routes/classRoutes'));
     app.use('/api/teacher', require('./routes/teacherRoutes'));
+    app.use('/api/adminteacher', require('./routes/adminteacherRoutes'));
 
     app.use(errorHandler);
 
