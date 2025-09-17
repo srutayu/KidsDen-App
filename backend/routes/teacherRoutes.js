@@ -17,7 +17,6 @@ router.get('/get-classes', getClassesForTeacher);
 router.get('/get-teacher-by-class', getTeachersInClass);
 router.get('/get-student-by-class', getStudentsInClass);
 router.get('/get-student-not-in-class', getStudentsNotInAClass);
-router.get('/get-student-not-in-any-class', getStudentsNotInAnyClass);
 
 module.exports = router;
 
