@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:frontend/controllers/auth_controller.dart';
-import 'package:frontend/models/classroom_model.dart';
 import 'package:frontend/provider/auth_provider.dart';
 import 'package:frontend/provider/user_data_provider.dart';
 import 'package:frontend/screens/auth/onboarding_page.dart';
@@ -8,7 +7,6 @@ import 'package:frontend/screens/chat/classlist.dart';
 import 'package:frontend/screens/teacher/classroom_details.dart';
 import 'package:provider/provider.dart';
 
-// import '../chat/classlist.dart';
 
 class TeacherPage extends StatefulWidget {
   const TeacherPage({super.key});

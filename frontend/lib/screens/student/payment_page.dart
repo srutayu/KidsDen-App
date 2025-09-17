@@ -61,12 +61,6 @@ class _PaymentPageState extends State<PaymentPage> {
 
     bool verified = false;
     try {
-      // print("Verifing Payment");
-      // print("PaymentId $paymentId");
-      // print("OrderId $orderId");
-      // print("Signature $signature");
-
-
       verified = await verifyPaymentOnBackend(
         paymentId: paymentId,
         orderId: orderId,
@@ -166,7 +160,10 @@ class _PaymentPageState extends State<PaymentPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: Text("Payment Page"),),
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        title: Text("Payments"),
+      ),
       body: Container(
         margin: EdgeInsets.all(40),
         child: Column(
