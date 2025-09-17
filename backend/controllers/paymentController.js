@@ -208,7 +208,7 @@ exports.getClass = async (req, res) => {
 //get classId from studentId, and get amount from fees collection 
 exports.updatePaymentRecordForOfflinePayment = async (req, res) => {
   try {
-    const { month, year, studentId } = req.body;
+    let { month, year, studentId } = req.body;
     if (!month || !year || !studentId) {
       return res.status(400).json({ message: 'month, year, and studentId are required' });
     }

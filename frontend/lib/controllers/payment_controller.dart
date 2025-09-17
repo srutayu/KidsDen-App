@@ -78,7 +78,30 @@ class GetFeesController{
     }
   }
 
+  static Future<bool> updateCashPayment(token , month, year, studentId) async {
+    final url = Uri.parse('$_baseURL/admin/offline-payment');
+    Map<String, dynamic> body = {
+      'month': month,
+      'year': year,
+      'studentId': studentId
+    };
 
+    final response = await http.post(
+      url,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode(body),
+    );
+
+    if(response.statusCode == 200) {
+      Map<String, dynamic> jsonMap = jsonDecode(response.body);
+      return true;
+    } else  {
+      throw Exception("Error updating cash payment, ${response.statusCode}");
+    }
+  }
 
 
 }

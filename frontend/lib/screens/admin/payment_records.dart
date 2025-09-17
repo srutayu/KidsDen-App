@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:frontend/constants/url.dart';
 import 'package:frontend/controllers/class_controller.dart';
 import 'package:frontend/controllers/fees_controller.dart';
+import 'package:frontend/controllers/payment_controller.dart';
 import 'package:frontend/models/payment_model.dart';
 import 'package:frontend/provider/auth_provider.dart';
 import 'package:http/http.dart' as http;
@@ -168,6 +169,10 @@ class _PaymentRecordsContentState extends State<PaymentRecordsContent> {
     'pending': [],
     'unpaid': [],
   };
+
+  Map<String, String> listOfUnpaidStudent = {};
+  Map<String, String> listOfPendingStudent = {};
+
   List<String> classes = [];
 
   final Map<String, String> _userNameCache = {};
@@ -216,16 +221,16 @@ class _PaymentRecordsContentState extends State<PaymentRecordsContent> {
     }
   }
 
-  Future<Map<String, List<String>>> fetchStudentsWithNames(
+  Future<Map<String, Map<String, String>>> fetchStudentsWithNames(
       Map<String, List<String>> studentsById) async {
-    final Map<String, List<String>> result = {};
+    final Map<String, Map<String, String>> result = {};
     for (var status in ['paid', 'pending', 'unpaid']) {
       List<String> studentIds = studentsById[status] ?? [];
-      List<String> names = [];
+      Map<String, String> names = {};
       for (var id in studentIds) {
         if (id.isNotEmpty) {
           final name = await fetchUserNameCached(id);
-          names.add(name);
+          names[id] = name;
         }
       }
       result[status] = names;
@@ -283,13 +288,23 @@ class _PaymentRecordsContentState extends State<PaymentRecordsContent> {
               : [],
         };
 
+        // listOfUnpaidStudents = studentsRaw['unpaid'] ?? [];
+
         final namedStudents = await fetchStudentsWithNames(studentsRaw);
+        // print(namedStudents);
 
         setState(() {
           statusCounts['paid'] = counts['paid'] ?? 0;
           statusCounts['pending'] = counts['pending'] ?? 0;
           statusCounts['unpaid'] = namedStudents['unpaid']?.length ?? 0;
-          studentsByStatus = namedStudents;
+
+          studentsByStatus['paid'] = namedStudents['paid']?.values.toList() ?? [];
+          studentsByStatus['pending'] = namedStudents['pending']?.values.toList() ?? [];
+          studentsByStatus['unpaid'] = namedStudents['unpaid']?.values.toList() ?? [];
+
+          listOfUnpaidStudent = namedStudents['unpaid']!;
+          listOfPendingStudent = namedStudents['pending']!;
+          // print(listOfPendingStudent);
         });
       } else {
         throw Exception('Failed to load payment status');
@@ -392,8 +407,8 @@ class _PaymentRecordsContentState extends State<PaymentRecordsContent> {
           const Text('No payment data for this month and class'),
         const SizedBox(height: 20),
         buildPaidStudentList('Paid Students', studentsByStatus['paid']!),
-        buildStudentList('Pending Students', studentsByStatus['pending']!),
-        buildStudentList('Unpaid Students', studentsByStatus['unpaid']!),
+        buildStudentList('Pending Students', listOfPendingStudent),
+        buildStudentList('Unpaid Students', listOfUnpaidStudent),
       ],
     );
   }
@@ -406,36 +421,35 @@ class _PaymentRecordsContentState extends State<PaymentRecordsContent> {
           : students.map((name) => ListTile(title: Text(name))).toList(),
     );
   }
-}
 
-Widget buildStudentList(String title, List<String> students) {
-  return ExpansionTile(
-    title: Text('$title (${students.length})'),
-    children: students.isEmpty
-        ? [const ListTile(title: Text('No students'))]
-        : students
-            .map(
-              (name) => ListTile(
-                title: Text(name),
-                trailing: TextButton(
-                  style: TextButton.styleFrom(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                    backgroundColor: Colors.green.shade100,
-                  ),
-                  onPressed: () {
-                    // TODO: handle cash taken for this student
-                    print("Cash taken for $name");
-                  },
-                  child: const Text(
-                    "Cash Taken",
-                    style: TextStyle(color: Colors.green),
-                  ),
+  Widget buildStudentList(String title, Map<String, String> students) {
+    return ExpansionTile(
+      title: Text('$title (${students.length})'),
+      children: students.isEmpty ? [const ListTile(title: Text('No students'))] : students.entries.map(
+              (entry) => ListTile(
+            title: Text(entry.value),
+            trailing: TextButton(
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  backgroundColor: Colors.green.shade100,
                 ),
-              ),
-            )
-            .toList(),
-  );
+                onPressed: () {
+                  String monthName = PaymentModel.getMonthName(selectedDate.month);
+                  monthName = monthName.substring(0, 1).toLowerCase() + monthName.substring(1);
+                  GetFeesController.updateCashPayment(widget.token,monthName, selectedDate.year.toString(), entry.key).then((value) {
+                    if(value) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text("Cash Taken Successfully")),
+                      );
+                      fetchPaymentStatus();
+                    }
+                  },);
+                }, child: const Text("Cash Taken", style: TextStyle(color: Colors.green),)),
+            // subtitle: Text(entry.key),
+          ))
+          .toList(),
+    );
+  }
 }
 
 class StatusData {
