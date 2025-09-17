@@ -22,5 +22,3 @@ router.get('/get-student-not-in-any-class', getStudentsNotInAnyClass);
 module.exports = router;
 
 
-module.exports = router;
-
