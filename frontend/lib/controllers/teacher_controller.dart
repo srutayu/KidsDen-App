@@ -6,37 +6,32 @@ import 'dart:convert';
 class TeacherController {
   static final _baseURL = URL.baseURL;
 
-
   Future<bool> addStudents(classId, studentsId, token) async {
     final url = Uri.parse('$_baseURL/teacher/add-students');
-    final response = await http.post(url, headers: {
-      'Content-Type':'application/json',
-      'Authorization': 'Bearer $token'
-    }, body: jsonEncode({
-      "classId": classId,
-      "studentIds": studentsId
-    }));
+    final response = await http.post(url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token'
+        },
+        body: jsonEncode({"classId": classId, "studentIds": studentsId}));
 
-    if(response.statusCode == 200){
+    if (response.statusCode == 200) {
       return true;
     } else {
       throw Exception("Failed to add students ${response.statusCode}");
     }
-
   }
-
 
   Future<bool> deleteStudent(classId, studentId, token) async {
     final url = Uri.parse('$_baseURL/teacher/delete-student');
-    final response = await http.delete(url, headers: {
-      'Content-Type':'application/json',
-      'Authorization': 'Bearer $token'
-    }, body: jsonEncode({
-      "classId": classId,
-      "studentId":studentId
-    }));
+    final response = await http.delete(url,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer $token'
+        },
+        body: jsonEncode({"classId": classId, "studentId": studentId}));
 
-    if(response.statusCode == 200){
+    if (response.statusCode == 200) {
       return true;
     } else {
       throw Exception("Failed to delete Students ${response.statusCode}");
@@ -54,8 +49,9 @@ class TeacherController {
       final data = json.decode(response.body);
       final List classesjson = data['classes'] ?? [];
 
-      List<ClassroomModel> classes = classesjson.map<ClassroomModel>(
-              (json) => ClassroomModel.fromJson(json)).toList();
+      List<ClassroomModel> classes = classesjson
+          .map<ClassroomModel>((json) => ClassroomModel.fromJson(json))
+          .toList();
       return classes;
     } else {
       throw Exception("Failed to load classes");
@@ -63,18 +59,20 @@ class TeacherController {
   }
 
   Future<List<ClassroomModel>> getTeacherInClass(classId, token) async {
-    final url = Uri.parse('$_baseURL/teacher/get-teacher-by-class?classId=$classId');
+    final url =
+        Uri.parse('$_baseURL/teacher/get-teacher-by-class?classId=$classId');
     final response = await http.get(url, headers: {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer $token'
     });
 
-    if(response.statusCode == 200){
+    if (response.statusCode == 200) {
       final data = json.decode(response.body);
       final List teachersjson = data['teachers'] ?? [];
 
-      List<ClassroomModel> teachers = teachersjson.map<ClassroomModel>(
-              (json) => ClassroomModel.fromJson(json)).toList();
+      List<ClassroomModel> teachers = teachersjson
+          .map<ClassroomModel>((json) => ClassroomModel.fromJson(json))
+          .toList();
       return teachers;
     } else {
       throw Exception("Failed to load teachers");
@@ -82,42 +80,44 @@ class TeacherController {
   }
 
   Future<List<ClassroomModel>> getStudentsInClass(classId, token) async {
-    final url = Uri.parse('$_baseURL/teacher/get-student-by-class?classId=$classId');
+    final url =
+        Uri.parse('$_baseURL/teacher/get-student-by-class?classId=$classId');
     final response = await http.get(url, headers: {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer $token'
     });
 
-    if(response.statusCode == 200){
+    if (response.statusCode == 200) {
       final data = json.decode(response.body);
       final List studentsjson = data['students'] ?? [];
 
-      List<ClassroomModel> students = studentsjson.map<ClassroomModel>(
-              (json) => ClassroomModel.fromJson(json)).toList();
+      List<ClassroomModel> students = studentsjson
+          .map<ClassroomModel>((json) => ClassroomModel.fromJson(json))
+          .toList();
       return students;
     } else {
       throw Exception("Failed to load students");
     }
   }
-
 
   Future<List<ClassroomModel>> getStudentsNotInClass(classId, token) async {
-    final url = Uri.parse('$_baseURL/teacher/get-student-not-in-class?classId=$classId');
+    final url =
+        Uri.parse('$_baseURL/adminteacher/get-student-not-in-any-class');
     final response = await http.get(url, headers: {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer $token'
     });
 
-    if(response.statusCode == 200) {
+    if (response.statusCode == 200) {
       final data = json.decode(response.body);
       final List studentsjson = data['students'] ?? [];
 
-      List<ClassroomModel> students = studentsjson.map<ClassroomModel>(
-              (json) => ClassroomModel.fromJson(json)).toList();
+      List<ClassroomModel> students = studentsjson
+          .map<ClassroomModel>((json) => ClassroomModel.fromJson(json))
+          .toList();
       return students;
     } else {
       throw Exception("Failed to load students");
     }
   }
-
 }

@@ -8,7 +8,8 @@ class ClassroomDetailsTeacher extends StatefulWidget {
   const ClassroomDetailsTeacher({super.key});
 
   @override
-  State<ClassroomDetailsTeacher> createState() => _ClassroomDetailsTeacherState();
+  State<ClassroomDetailsTeacher> createState() =>
+      _ClassroomDetailsTeacherState();
 }
 
 class _ClassroomDetailsTeacherState extends State<ClassroomDetailsTeacher> {
@@ -51,7 +52,8 @@ class _ClassroomDetailsTeacherState extends State<ClassroomDetailsTeacher> {
     setState(() => _loading = true);
     try {
       final students = await _controller.getStudentsInClass(classId, token);
-      final studentsNotIn = await _controller.getStudentsNotInClass(classId, token);
+      final studentsNotIn =
+          await _controller.getStudentsNotInClass(classId, token);
 
       setState(() {
         _studentsInClass = students;
@@ -125,9 +127,9 @@ class _ClassroomDetailsTeacherState extends State<ClassroomDetailsTeacher> {
                   onPressed: selected == null
                       ? null
                       : () {
-                    _addStudent(selected!);
-                    Navigator.pop(context);
-                  },
+                          _addStudent(selected!);
+                          Navigator.pop(context);
+                        },
                   child: const Text('Add'),
                 )
               ],
@@ -148,9 +150,13 @@ class _ClassroomDetailsTeacherState extends State<ClassroomDetailsTeacher> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Students', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                const Text('Students',
+                    style:
+                        TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
                 ElevatedButton.icon(
-                  onPressed: _studentsNotInClass.isEmpty ? null : _showAddStudentDialog,
+                  onPressed: _studentsNotInClass.isEmpty
+                      ? null
+                      : _showAddStudentDialog,
                   icon: const Icon(Icons.add),
                   label: const Text('Add Student'),
                 ),
@@ -161,12 +167,12 @@ class _ClassroomDetailsTeacherState extends State<ClassroomDetailsTeacher> {
               const Text('No students in this class')
             else
               ..._studentsInClass.map((student) => ListTile(
-                title: Text(student.name),
-                trailing: IconButton(
-                  icon: const Icon(Icons.delete, color: Colors.red),
-                  onPressed: () => _removeStudent(student),
-                ),
-              )),
+                    title: Text(student.name),
+                    trailing: IconButton(
+                      icon: const Icon(Icons.delete, color: Colors.red),
+                      onPressed: () => _removeStudent(student),
+                    ),
+                  )),
           ],
         ),
       ),
@@ -180,7 +186,6 @@ class _ClassroomDetailsTeacherState extends State<ClassroomDetailsTeacher> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Classroom Management - Teacher')),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
