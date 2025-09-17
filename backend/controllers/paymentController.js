@@ -204,3 +204,46 @@ exports.getClass = async (req, res) => {
   }
 }
 
+//month, year, studentId
+//get classId from studentId, and get amount from fees collection 
+exports.updatePaymentRecordForOfflinePayment = async (req, res) => {
+  try {
+    const { month, year, studentId } = req.body;
+    if (!month || !year || !studentId) {
+      return res.status(400).json({ message: 'month, year, and studentId are required' });
+    }
+    month = month.charAt(0).toLowerCase() + month.slice(1).toLowerCase();
+    const student = await User.findById(studentId);
+    if (!student) {
+      return res.status(404).json({ message: 'Student not found' });
+    }
+    // console.log(student);
+    const classId = student.assignedClasses && student.assignedClasses.length > 0 ? student.assignedClasses[0] : null;
+    if (!classId) {
+      return res.status(400).json({ message: 'Student does not have a class assigned' });
+    }
+    console.log('Class ID:', classId);
+
+    const fees = await Fees.findOne({ classId });
+    if (!fees) {
+      return res.status(404).json({ message: 'Fees record not found for the student\'s class' });
+    }
+
+    let payment = await Payment.findOneAndUpdate(
+      { studentId, classId, year, month },
+      { status: "paid", amount: fees.amount, paymentId : "cash_paid",updatedAt: new Date() },
+      { new: true, upsert: true , setDefaultsOnInsert: true}
+    );
+    await payment.save();
+    await sendPaymentConfirmationEmail(
+      student.email,
+      student.name,
+      fees.amount,
+      payment.updatedAt
+    );
+    res.status(200).json({ message: 'Payment record updated for offline payment and confirmation email sent' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Could not update payment record' });
+  }
+}
