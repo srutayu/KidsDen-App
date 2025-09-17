@@ -187,7 +187,7 @@ class ClassroomController {
   }
 
   Future<List<ClassroomModel>> getStudentsNotInClass(classId, token) async {
-    final url = Uri.parse('$_baseURL/class/get-student-not-in-class?classId=$classId');
+    final url = Uri.parse('$_baseURL/adminteacher/get-student-not-in-any-class');
     final response = await http.get(url, headers: {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer $token'
