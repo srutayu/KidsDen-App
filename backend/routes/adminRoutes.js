@@ -4,7 +4,7 @@ const { protect } = require('../middleware/authMiddleware');
 const authorizeRole = require('../middleware/roleMiddleware').authorize;
 const { getPendingApprovals, approveUser, approveAllUsers, rejectAllUsers, deleteUserAfterRejection } = require('../controllers/adminUserRequestController');
 const { getFees, getStatusOfPayments } = require('../controllers/feesController');
-const { getYears, getMonthsByYear, getClass } = require('../controllers/paymentController');
+const { getYears, getMonthsByYear, getClass, updatePaymentRecordForOfflinePayment } = require('../controllers/paymentController');
 const { getUserNameById } = require('../controllers/authController');
 
 const router = express.Router();
@@ -27,6 +27,7 @@ router.get('/get-fees',getFees);
 router.get('/get-status', getStatusOfPayments);
 
 router.get('/user-name', getUserNameById);
+router.post('/offline-payment', updatePaymentRecordForOfflinePayment);
 
 
 module.exports = router;
