@@ -1,21 +1,3 @@
-// Get role and login time from JWT token
-exports.getRoleAndTimefromToken = (req, res) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return res.status(401).json({ message: 'No token provided' });
-    }
-    const token = authHeader.split(' ')[1];
-    try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        // role and iat (issued at)
-        const role = decoded.role;
-        const loginTime = decoded.iat ? new Date(decoded.iat * 1000) : null;
-        return res.status(200).json({ role, loginTime });
-    } catch (error) {
-        console.error(error);
-        return res.status(401).json({ message: 'Invalid token' });
-    }
-};
 const User = require('../models/userModel');
 const redisClient = require('../config/redisClient');
 const generateToken = require('../utils/generateToken');
