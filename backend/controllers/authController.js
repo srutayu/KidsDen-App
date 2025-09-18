@@ -1,3 +1,21 @@
+// Get role and login time from JWT token
+exports.getRoleAndTimefromToken = (req, res) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ message: 'No token provided' });
+    }
+    const token = authHeader.split(' ')[1];
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        // role and iat (issued at)
+        const role = decoded.role;
+        const loginTime = decoded.iat ? new Date(decoded.iat * 1000) : null;
+        return res.status(200).json({ role, loginTime });
+    } catch (error) {
+        console.error(error);
+        return res.status(401).json({ message: 'Invalid token' });
+    }
+};
 const User = require('../models/userModel');
 const redisClient = require('../config/redisClient');
 const generateToken = require('../utils/generateToken');
@@ -168,3 +186,25 @@ exports.getUserNameById = async (req, res) => {
         res.status(500).json({ message: 'Server error retrieving user name' });
     }
 }
+
+exports.getRoleAndTimefromToken = (req, res) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ message: 'No token provided' });
+    }
+    const token = authHeader.split(' ')[1];
+    try {
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
+        const role = decoded.role;
+        let loginDate = null, loginTime = null;
+        if (decoded.iat) {
+            const loginDateObj = new Date(decoded.iat * 1000);
+            loginDate = loginDateObj.toISOString().split('T')[0]; // YYYY-MM-DD
+            loginTime = loginDateObj.toTimeString().split(' ')[0]; // HH:MM:SS
+        }
+        return res.status(200).json({ role, loginDate, loginTime });
+    } catch (error) {
+        console.error(error);
+        return res.status(401).json({ message: 'Invalid token' });
+    }
+};
