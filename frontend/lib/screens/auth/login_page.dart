@@ -1,5 +1,5 @@
-// import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:frontend/controllers/auth_controller.dart';
 import 'package:frontend/provider/auth_provider.dart';
@@ -115,13 +115,15 @@ class _LoginPageState extends State<LoginPage> {
                       
                           String? role = loginResponse?.user.role;
                           String? token = loginResponse?.token;
+
+                          final storage= const FlutterSecureStorage();
                       
                           Provider.of<AuthProvider>(context, listen: false)
                               .setToken(token!);
+                          await storage.write(key: 'token', value:  token);
                           Provider.of<UserProvider>(context, listen: false)
                               .fetchUserDetails(_email.text, token);
-
-                          final String username = Provider.of<UserProvider>(context, listen: false).user!.name;
+                          await storage.write(key: 'email', value: _email.text);
                       
                           if (role == 'admin') {
                             Navigator.pushReplacement(

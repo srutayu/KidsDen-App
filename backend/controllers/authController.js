@@ -178,13 +178,14 @@ exports.getRoleAndTimefromToken = (req, res) => {
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         const role = decoded.role;
+        const id = decoded.id;
         let loginDate = null, loginTime = null;
         if (decoded.iat) {
             const loginDateObj = new Date(decoded.iat * 1000);
             loginDate = loginDateObj.toISOString().split('T')[0]; // YYYY-MM-DD
             loginTime = loginDateObj.toTimeString().split(' ')[0]; // HH:MM:SS
         }
-        return res.status(200).json({ role, loginDate, loginTime });
+        return res.status(200).json({ id, role, loginDate, loginTime });
     } catch (error) {
         console.error(error);
         return res.status(401).json({ message: 'Invalid token' });

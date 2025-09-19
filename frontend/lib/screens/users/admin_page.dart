@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:frontend/controllers/auth_controller.dart';
 import 'package:frontend/provider/auth_provider.dart';
 import 'package:frontend/screens/admin/classroom_details.dart';
@@ -21,6 +22,7 @@ class _AdminPageState extends State<AdminPage> {
   late final token = Provider.of<AuthProvider>(context, listen: false).token!;
   int selectedIndex=0;
   late List<Widget> _pages;
+  final storage= FlutterSecureStorage();
 
   @override
   void initState() {
@@ -46,6 +48,7 @@ class _AdminPageState extends State<AdminPage> {
           IconButton(
               onPressed: () async {
                 try {
+                  await storage.deleteAll();
                   final value = await AuthController.logout(token);
                   if (value) {
                     Navigator.pushReplacement(
