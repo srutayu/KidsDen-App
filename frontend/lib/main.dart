@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:frontend/provider/auth_provider.dart';
 import 'package:frontend/provider/themeProvider.dart';
 import 'package:frontend/provider/user_data_provider.dart';
-import 'package:frontend/screens/auth/onboarding_page.dart';
+import 'package:frontend/screens/splash/splash_screen.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:month_year_picker/month_year_picker.dart';
@@ -28,7 +28,7 @@ class MyApp extends StatelessWidget {
           seedColor: const Color.fromARGB(255, 82, 172, 163),
           brightness: Brightness.light),
       ),
-      home: OnboardingPage(),
+      home: SplashScreen(),
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,

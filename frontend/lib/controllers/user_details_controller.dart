@@ -21,4 +21,24 @@ class UserDetailController{
      throw Exception('Failer to load user data. Status Code : ${response.statusCode}');
    }
  }
+
+ static Future<User> getRoleFromToken(String token) async {
+    final url = Uri.parse('$_baseURL/get-role');
+
+    final response = await http.get(
+      url,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final Map<String, dynamic> jsonResponse = json.decode(response.body);
+      return User.fromJson(jsonResponse);
+    } else {
+      throw Exception(
+          'Failed to fetch role. Status Code: ${response.statusCode}');
+    }
+  }
 }
