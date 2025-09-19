@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:frontend/provider/user_data_provider.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:http/http.dart' as http;
@@ -117,7 +118,8 @@ class _ChatScreenState extends State<ChatScreen> {
   setState(() {
     messages.add({
       'content': msg,
-      'sender': currentUserId, 
+      'sender': currentUserId,
+      'timestamp': DateTime.now().toUtc().toIso8601String(),
     });
   });
 
@@ -182,10 +184,18 @@ class _ChatScreenState extends State<ChatScreen> {
 
   final bool isMe = currentUserId != null && senderId == currentUserId;
     return Align(
-      alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+      // alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+      child: Align(
+  alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+  child: ConstrainedBox(
+    constraints: BoxConstraints(
+      minWidth: MediaQuery.of(context).size.width * 0.32,  // 20% of screen
+      maxWidth: MediaQuery.of(context).size.width * 0.8,  // 80% of screen
+    ),
+    child: IntrinsicWidth(
       child: Container(
-        margin: EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-        padding: EdgeInsets.all(12),
+        margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+        padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
           color: isMe ? Colors.greenAccent : Colors.grey.shade300,
           borderRadius: BorderRadius.circular(16),
@@ -193,14 +203,41 @@ class _ChatScreenState extends State<ChatScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(msg['content'] ?? msg['message'] ?? '',
-                style: TextStyle(fontSize: 16)),
-            SizedBox(height: 4),
-            Text(initials,
-                style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+            // Message text
+            Text(
+              msg['content'],
+              style: const TextStyle(fontSize: 16),
+            ),
+            const SizedBox(height: 4),
+      
+            // Bottom row: initials + timestamp
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  initials,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.black54,
+                  ),
+                ),
+                Text(
+                 DateFormat('h:mma').format(DateTime.parse(msg['timestamp']).toLocal()).toLowerCase(),
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: Colors.black38,
+                  ),
+                ),
+              ],
+            ),
           ],
         ),
       ),
+    ),
+  ),
+),
+
     );
   }
 
@@ -239,6 +276,8 @@ class _ChatScreenState extends State<ChatScreen> {
                     Expanded(
                       child: TextField(
                         controller: _controller,
+                        maxLines: null,
+                        keyboardType: TextInputType.multiline,
                         onChanged: (val) => sendTyping(val.isNotEmpty),
                         decoration: InputDecoration(
                           hintText: 'Type a message',
