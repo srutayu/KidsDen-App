@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:frontend/controllers/auth_controller.dart';
 import 'package:frontend/provider/auth_provider.dart';
 import 'package:frontend/provider/user_data_provider.dart';
@@ -16,9 +17,9 @@ class StudentPage extends StatefulWidget {
 
 class _StudentPageState extends State<StudentPage> {
   late final token = Provider.of<AuthProvider>(context, listen: false).token!;
-  late final userId =
-      Provider.of<UserProvider>(context, listen: false).user!.id;
+  late final userId = Provider.of<UserProvider>(context, listen: false).user!.id;
   int selectedIndex = 0;
+  final storage = FlutterSecureStorage();
   late List<Widget> _pages;
 
   @override
@@ -40,6 +41,7 @@ class _StudentPageState extends State<StudentPage> {
           IconButton(
               onPressed: () async {
                 try {
+                  await storage.deleteAll();
                   final value = await AuthController.logout(token);
                   if (value) {
                     Navigator.pushReplacement(
