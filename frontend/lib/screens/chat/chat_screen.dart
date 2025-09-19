@@ -222,6 +222,7 @@ class _ChatScreenState extends State<ChatScreen> {
                     color: Colors.black54,
                   ),
                 ),
+                SizedBox(width: 4),
                 Text(
                  DateFormat('h:mma').format(DateTime.parse(msg['timestamp']).toLocal()).toLowerCase(),
                   style: const TextStyle(
