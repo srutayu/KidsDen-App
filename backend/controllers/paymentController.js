@@ -268,6 +268,7 @@ exports.getPaymentData = async (req, res) => {
     const payments = await Payment.find({ studentId });
     const fees = payments.map(payment => ({
       month: payment.month,
+      year: payment.year,
       status: payment.status,
       transactionId: payment.paymentId || 'N/A'
     }));

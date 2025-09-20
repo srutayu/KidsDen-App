@@ -103,5 +103,26 @@ class GetFeesController{
     }
   }
 
+  static Future<Map<String, dynamic>> getPaymentData(String studentId, String token) async {
+    try {
+      final url = Uri.parse("$_baseURL/adminstudent/payment-data?studentId=$studentId");
+      final response = await http.get(
+        url,
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer $token", // if your backend uses auth
+        },
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body);
+      } else {
+        throw Exception("Failed to fetch payment data. Code: ${response.statusCode}");
+      }
+    } catch (e) {
+      throw Exception("Error fetching payment data: $e");
+    }
+  }
+
 
 }
