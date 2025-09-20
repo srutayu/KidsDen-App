@@ -261,17 +261,71 @@ exports.updatePaymentRecordForOfflinePayment = async (req, res) => {
 
 exports.getPaymentData = async (req, res) => {
   try {
-    const studentId = req.query.studentId || req.body.studentId || req.user?._id;
+    const studentId = req.user?._id;
     if (!studentId) {
-      return res.status(400).json({ error: 'studentId is required' });
+      return res.status(401).json({ error: 'Not authorized, no user found' });
     }
     const payments = await Payment.find({ studentId });
     const fees = payments.map(payment => ({
       month: payment.month,
+      year: payment.year,
       status: payment.status,
       transactionId: payment.paymentId || 'N/A'
     }));
     return res.json({ fees });
+  } catch (error) {
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+}
+
+exports.paymentDetailsByStudent = async (req, res) => {
+  try {
+  const studentId = req.user?._id;
+    if (!studentId) {
+      return res.status(400).json({ error: 'studentId is required' });
+    }
+    // academic months (April to March)
+    const allMonths = [
+      "April", "May", "June", "July", "August", "September", "October", "November", "December", "January", "February", "March"
+    ];
+
+    const now = new Date();
+    const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    let currentMonthName = monthNames[now.getMonth()];
+    let endIdx = allMonths.indexOf(currentMonthName);
+
+    if (endIdx === -1) {
+      return res.json({ months: [] });
+    }
+
+    const filteredMonths = allMonths.slice(0, endIdx + 1);
+    const payments = await Payment.find({ studentId });
+    const paymentMap = {};
+
+    payments.forEach(p => {
+      const trimmedMonth = p.month.trim();
+      const normalizedMonth = trimmedMonth.charAt(0).toUpperCase() + trimmedMonth.slice(1).toLowerCase();
+      paymentMap[normalizedMonth] = p;
+    });
+    
+    // console.log(paymentMap);
+    const months = filteredMonths.map(month => {
+      if (paymentMap[month] && (paymentMap[month].status === "paid" || paymentMap[month].status === "pending")) {
+        return {
+          month: month,
+          status: paymentMap[month].status,
+          txn_id: paymentMap[month].paymentId || "N/A"
+        };
+      } else {
+        return {
+          month: month,
+          status: "unpaid",
+          txn_id: "nil"
+        };
+      }
+    });
+    months.reverse();
+    return res.json({ months });
   } catch (error) {
     return res.status(500).json({ error: 'Internal Server Error' });
   }
