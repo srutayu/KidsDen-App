@@ -312,17 +312,19 @@ exports.paymentDetailsByStudent = async (req, res) => {
     const months = filteredMonths.map(month => {
       if (paymentMap[month] && (paymentMap[month].status === "paid" || paymentMap[month].status === "pending")) {
         return {
-          name: month,
+          month: month,
           status: paymentMap[month].status,
           txn_id: paymentMap[month].paymentId || "N/A"
         };
       } else {
         return {
-          name: month,
-          status: "unpaid"
+          month: month,
+          status: "unpaid",
+          txn_id: "nil"
         };
       }
     });
+    months.reverse();
     return res.json({ months });
   } catch (error) {
     return res.status(500).json({ error: 'Internal Server Error' });

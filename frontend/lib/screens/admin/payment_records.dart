@@ -445,7 +445,6 @@ class _PaymentRecordsContentState extends State<PaymentRecordsContent> {
                     }
                   },);
                 }, child: const Text("Cash Taken", style: TextStyle(color: Colors.green),)),
-            // subtitle: Text(entry.key),
           ))
           .toList(),
     );

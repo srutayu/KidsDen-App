@@ -105,7 +105,7 @@ class GetFeesController{
 
   static Future<Map<String, dynamic>> getPaymentData(String studentId, String token) async {
     try {
-      final url = Uri.parse("$_baseURL/adminstudent/payment-data?studentId=$studentId");
+      final url = Uri.parse("$_baseURL/payment-data?studentId=$studentId");
       final response = await http.get(
         url,
         headers: {
@@ -121,6 +121,23 @@ class GetFeesController{
       }
     } catch (e) {
       throw Exception("Error fetching payment data: $e");
+    }
+  }
+
+  static Future<Map<String, dynamic>> fetchPaymentDetails(String token) async {
+    final response = await http.get(
+      Uri.parse('$_baseURL/payment/payment-details'),
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token', // if using JWT
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final Map<String, dynamic> data = json.decode(response.body);
+      return data; 
+    } else {
+      throw Exception('Failed to fetch payment details');
     }
   }
 

@@ -7,7 +7,6 @@ import 'package:frontend/provider/user_data_provider.dart';
 import 'package:frontend/services/fees_service.dart';
 import 'package:provider/provider.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
-import 'package:intl/intl.dart';
 
 class PaymentPage extends StatefulWidget {
   const PaymentPage({super.key});
@@ -21,7 +20,6 @@ class _PaymentPageState extends State<PaymentPage> {
   late Razorpay _razorpay;
   late final token = Provider.of<AuthProvider>(context, listen: false).token;
   late final userData = Provider.of<UserProvider>(context, listen: false).user;
-
 
   List<dynamic> fees = [];
   bool isLoading = true;
@@ -38,40 +36,20 @@ class _PaymentPageState extends State<PaymentPage> {
     fetchFeesData();
   }
 
-  void ensureCurrentMonthIncluded() async {
-    final now = DateTime.now();
-    final currentMonth = DateFormat('MMMM').format(now).toLowerCase();
-    final currentYear = now.year;
-    final exists =
-        fees.any((fee) => fee["month"].toLowerCase() == currentMonth);
-
-    if (!exists) {
-      fees.insert(0, {
-        "month": currentMonth,
-        "year": currentYear,
-        "status": "pending",
-        "transactionId": null,
-      });
-    }
-  }
-
   Future<void> fetchFeesData() async {
-    final fetchedFee= await FeesService.fetchAmountByClass(userData!.assignedClasses[0], token);
+    final fetchedFee = await FeesService.fetchAmountByClass(
+        userData!.assignedClasses[0], token);
     setState(() {
       feeAmount = fetchedFee; // store it in state
     });
     try {
-      final response =
-          await GetFeesController.getPaymentData(userData!.id, token!);
+      final response = await GetFeesController.fetchPaymentDetails(token!);
       setState(() {
-        fees = response["fees"];
-        print(fees);
-        ensureCurrentMonthIncluded();
+        fees = response["months"];
         isLoading = false;
       });
     } catch (e) {
       setState(() => isLoading = false);
-      print("Error fetching fees: $e");
     }
   }
 
@@ -149,15 +127,12 @@ class _PaymentPageState extends State<PaymentPage> {
       // print(value);
       return value;
     } catch (error) {
-      print("Error : $error");
       return false;
     }
   }
 
   void openCheckout(
-      {required String month,
-      required int year,
-      required int amount}) async {
+      {required String month, required int year, required int amount}) async {
     try {
       var orderData =
           await createOrder(month: month, year: year, amount: amount);
@@ -195,9 +170,27 @@ class _PaymentPageState extends State<PaymentPage> {
               itemBuilder: (context, index) {
                 final fee = fees[index];
                 final month = fee["month"];
-                final year = fee["year"];
+                final now = DateTime.now();
+                final currentYear = now.year;
+                final monthsAprToDec = [
+                  "April",
+                  "May",
+                  "June",
+                  "July",
+                  "August",
+                  "September",
+                  "October",
+                  "November",
+                  "December"
+                ];
+                final monthsJanToMar = ["January", "February", "March"];
+                final year = monthsAprToDec.contains(month)
+                    ? currentYear
+                    : monthsJanToMar.contains(month)
+                        ? currentYear + 1
+                        : currentYear;
                 final status = fee["status"];
-                final transactionId = fee["transactionId"];
+                final transactionId = fee["txn_id"];
                 return Card(
                   margin: const EdgeInsets.symmetric(vertical: 8),
                   shape: RoundedRectangleBorder(
@@ -211,7 +204,7 @@ class _PaymentPageState extends State<PaymentPage> {
                     ),
                     subtitle: Text(
                       status == "paid"
-                          ? "Paid (Txn: $transactionId)"
+                          ? "Paid (Txn ID: $transactionId)"
                           : "Pending",
                       style: TextStyle(
                         color: status == "paid" ? Colors.green : Colors.red,
