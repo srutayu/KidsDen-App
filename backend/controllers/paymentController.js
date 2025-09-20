@@ -258,3 +258,21 @@ exports.updatePaymentRecordForOfflinePayment = async (req, res) => {
     res.status(500).json({ message: 'Could not update payment record' });
   }
 }
+
+exports.getPaymentData = async (req, res) => {
+  try {
+    const studentId = req.query.studentId || req.body.studentId || req.user?._id;
+    if (!studentId) {
+      return res.status(400).json({ error: 'studentId is required' });
+    }
+    const payments = await Payment.find({ studentId });
+    const fees = payments.map(payment => ({
+      month: payment.month,
+      status: payment.status,
+      transactionId: payment.paymentId || 'N/A'
+    }));
+    return res.json({ fees });
+  } catch (error) {
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
+}
