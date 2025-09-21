@@ -6,7 +6,7 @@ require('dotenv').config();
 
 const connectDB = require('./config/db');
 const errorHandler = require('./middleware/errorHandler');
-const { startFeeScheduler } = require('./feeScheduler');
+const { startFeeScheduler } = require('./scheduler/feeScheduler.js');
 
 // Start the fee scheduler
 startFeeScheduler();

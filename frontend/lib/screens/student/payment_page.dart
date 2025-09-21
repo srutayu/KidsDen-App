@@ -171,24 +171,6 @@ class _PaymentPageState extends State<PaymentPage> {
                 final fee = fees[index];
                 final month = fee["month"];
                 final now = DateTime.now();
-                final currentYear = now.year;
-                final monthsAprToDec = [
-                  "April",
-                  "May",
-                  "June",
-                  "July",
-                  "August",
-                  "September",
-                  "October",
-                  "November",
-                  "December"
-                ];
-                final monthsJanToMar = ["January", "February", "March"];
-                final year = monthsAprToDec.contains(month)
-                    ? currentYear
-                    : monthsJanToMar.contains(month)
-                        ? currentYear + 1
-                        : currentYear;
                 final status = fee["status"];
                 final transactionId = fee["txn_id"];
                 return Card(
@@ -198,7 +180,7 @@ class _PaymentPageState extends State<PaymentPage> {
                   elevation: 4,
                   child: ListTile(
                     title: Text(
-                      "${month.toString().toUpperCase()} $year",
+                      month.toString().toUpperCase(),
                       style: const TextStyle(
                           fontWeight: FontWeight.bold, fontSize: 18),
                     ),
@@ -216,7 +198,7 @@ class _PaymentPageState extends State<PaymentPage> {
                           : () {
                               openCheckout(
                                 month: fee["month"],
-                                year: fee["year"] ?? DateTime.now().year,
+                                year: now.year,
                                 amount: feeAmount,
                               );
                             },
