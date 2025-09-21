@@ -9,6 +9,10 @@ const feesSchema = new mongoose.Schema({
         type: Number, 
         required: true
     },
+    baseAmount: {
+        type: Number,
+        required: true
+    }
 });
 
 const Fees = mongoose.model('Fees', feesSchema);
