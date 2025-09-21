@@ -29,7 +29,7 @@ exports.createClass = async (req, res) => {
         });
 
         await newClass.save();
-        await Fees.create({ classId: newClass.name, amount: 0 });
+        await Fees.create({ classId: newClass.name, amount: 0, baseAmount: 0 });
         await User.updateMany(
             { _id: { $in: adminUserIds } },
             { $addToSet: { assignedClasses: newClass.name } }
