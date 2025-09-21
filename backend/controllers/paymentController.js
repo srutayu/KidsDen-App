@@ -280,20 +280,16 @@ exports.getPaymentData = async (req, res) => {
 
 exports.paymentDetailsByStudent = async (req, res) => {
   try {
-    const studentId = req.user?._id;
+  const studentId = req.user?._id;
     if (!studentId) {
       return res.status(400).json({ error: 'studentId is required' });
     }
-    const now = new Date();
     // academic months (April to March)
     const allMonths = [
       "April", "May", "June", "July", "August", "September", "October", "November", "December", "January", "February", "March"
     ];
-    // Determine academic year (April to March)
-    let year = now.getFullYear();
-    if (now.getMonth() < 3) { // Jan, Feb, Mar are part of previous academic year
-      year = year - 1;
-    }
+
+    const now = new Date();
     const monthNames = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
     let currentMonthName = monthNames[now.getMonth()];
     let endIdx = allMonths.indexOf(currentMonthName);
@@ -314,29 +310,22 @@ exports.paymentDetailsByStudent = async (req, res) => {
     
     // console.log(paymentMap);
     const months = filteredMonths.map(month => {
-      // Assign year: April-Dec = academic year, Jan-Mar = academic year+1
-      let monthYear = year;
-      if (["January", "February", "March"].includes(month)) {
-        monthYear = year + 1;
-      }
       if (paymentMap[month] && (paymentMap[month].status === "paid" || paymentMap[month].status === "pending")) {
         return {
           month: month,
           status: paymentMap[month].status,
-          txn_id: paymentMap[month].paymentId || "N/A",
-          year: paymentMap[month].year || monthYear
+          txn_id: paymentMap[month].paymentId || "N/A"
         };
       } else {
         return {
           month: month,
           status: "unpaid",
-          txn_id: "nil",
-          year: monthYear
+          txn_id: "nil"
         };
       }
     });
     months.reverse();
-  return res.json({ months });
+    return res.json({ months });
   } catch (error) {
     return res.status(500).json({ error: 'Internal Server Error' });
   }
