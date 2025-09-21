@@ -11,14 +11,13 @@ exports.createOrUpdateFees = async (req, res) => {
         return res.status(400).json({ message: 'Invalid class ID or amount' });
         }
     
-        const fees = await Fees.findOneAndUpdate(
-        { classId },
-        { amount },
-        { new: true, upsert: true, setDefaultsOnInsert: true }
-        );
-    
-        await fees.save();
-        res.json({ message: 'Fee structure saved', fees });
+    const fees = await Fees.findOneAndUpdate(
+      { classId },
+      { amount, baseAmount: amount },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
+    await fees.save();
+    res.json({ message: 'Fee structure saved', fees });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Could not save fee structure' });
@@ -28,22 +27,22 @@ exports.createOrUpdateFees = async (req, res) => {
 exports.getFees = async (req, res) => {
     try {
         const { classId } = req.query;
-    
+
         if (!classId) {
         return res.status(400).json({ message: 'classId is required' });
         }
-    
+
         const fees = await Fees.findOne({ classId });
-    
+
         if (!fees) {
         return res.status(404).json({ message: 'Fee structure not found for this class' });
         }
-    
+
         res.json({amount: fees.amount });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Could not retrieve fee structure' });
-    }
+  }
 };
 
 //Get all the unique classes
