@@ -1,6 +1,6 @@
 const cron = require('node-cron');
 const mongoose = require('mongoose');
-const Fees = require('./models/feesModel');
+const Fees = require('../models/feesModel');
 require('dotenv').config();
 
 function isMasterProcess() {
@@ -26,7 +26,7 @@ async function cacheBaseFees() {
             console.error(`[FeeScheduler] [ERROR] Invalid baseAmount for Fees document with id: ${fee._id}`);
         }
     }
-    console.log('[FeeScheduler] Base fees cached:', baseFees);
+    // console.log('[FeeScheduler] Base fees cached:', baseFees);
 }
 
 
