@@ -7,9 +7,11 @@ require('dotenv').config();
 const connectDB = require('./config/db');
 const errorHandler = require('./middleware/errorHandler');
 const { startFeeScheduler } = require('./schedular/feeScheduler.js');
+const { startPaymentScheduler } = require('./schedular/paymentSchedular.js');
 
 // Start the fee scheduler
 startFeeScheduler();
+startPaymentScheduler();
 
 // const numCPUs = os.cpus().length;
 const numCPUs = 1; // For development, limit to 2 CPUs. Change as needed.
