@@ -29,7 +29,7 @@ class _BroadcastScreenState extends State<BroadcastScreen> {
   }
 
   Future<void> fetchClasses() async {
-    final url = '${URL.chatURL}/api/classes/get-classes';  // Update endpoints
+    final url = '${URL.chatURL}/api/classes/get-classes';
     final res = await http.get(
       Uri.parse(url),
       headers: {'Authorization': 'Bearer ${widget.authToken}'},
