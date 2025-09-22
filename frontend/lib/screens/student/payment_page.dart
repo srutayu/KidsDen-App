@@ -36,6 +36,14 @@ class _PaymentPageState extends State<PaymentPage> {
     fetchFeesData();
   }
 
+  Future<void> _refreshData() async {
+  setState(() {
+    isLoading = true; // show loading spinner while refreshing
+  });
+
+  await fetchFeesData(); // this already sets fees + feeAmount + isLoading
+}
+
   Future<void> fetchFeesData() async {
     final fetchedFee = await FeesService.fetchAmountByClass(
         userData!.assignedClasses[0], token);
@@ -73,36 +81,38 @@ class _PaymentPageState extends State<PaymentPage> {
   }
 
   void _handlePaymentSuccess(PaymentSuccessResponse response) async {
-    final paymentId = response.paymentId ?? '';
-    final orderId = response.orderId ?? ''; // Might be nullable
-    final signature = (response as dynamic).signature ?? '';
+  final paymentId = response.paymentId ?? '';
+  final orderId = response.orderId ?? ''; // Might be nullable
+  final signature = (response as dynamic).signature ?? '';
 
-    bool verified = false;
-    try {
-      verified = await verifyPaymentOnBackend(
-        paymentId: paymentId,
-        orderId: orderId,
-        signature: signature,
-      );
-    } catch (e) {
-      print("Error verifying payment: $e");
-    }
-
-    if (!mounted) return;
-
-    if (verified) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Payment Successful and Verified!")),
-      );
-      // Perform further success actions, e.g., navigate or update UI
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content:
-                Text("Payment verification failed. Please contact support.")),
-      );
-    }
+  bool verified = false;
+  try {
+    verified = await verifyPaymentOnBackend(
+      paymentId: paymentId,
+      orderId: orderId,
+      signature: signature,
+    );
+  } catch (e) {
+    print("Error verifying payment: $e");
   }
+
+  if (!mounted) return;
+
+  if (verified) {
+    await _refreshData();
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text("Payment Successful and Verified!")),
+    );
+  } else {
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text("Payment verification failed. Please contact support."),
+      ),
+    );
+  }
+}
+
 
   void _handlePaymentError(PaymentFailureResponse response) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -161,53 +171,56 @@ class _PaymentPageState extends State<PaymentPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Payments")),
+      appBar: AppBar(title: const Text("Payments"), automaticallyImplyLeading: false,),
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
-          : ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: fees.length,
-              itemBuilder: (context, index) {
-                final fee = fees[index];
-                final month = fee["month"];
-                final now = DateTime.now();
-                final status = fee["status"];
-                final transactionId = fee["txn_id"];
-                return Card(
-                  margin: const EdgeInsets.symmetric(vertical: 8),
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
-                  elevation: 4,
-                  child: ListTile(
-                    title: Text(
-                      month.toString().toUpperCase(),
-                      style: const TextStyle(
-                          fontWeight: FontWeight.bold, fontSize: 18),
-                    ),
-                    subtitle: Text(
-                      status == "paid"
-                          ? "Paid (Txn ID: $transactionId)"
-                          : "Pending",
-                      style: TextStyle(
-                        color: status == "paid" ? Colors.green : Colors.red,
+          : RefreshIndicator(
+            onRefresh: _refreshData,
+            child: ListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: fees.length,
+                itemBuilder: (context, index) {
+                  final fee = fees[index];
+                  final month = fee["month"];
+                  final now = DateTime.now();
+                  final status = fee["status"];
+                  final transactionId = fee["txn_id"];
+                  return Card(
+                    margin: const EdgeInsets.symmetric(vertical: 8),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                    elevation: 4,
+                    child: ListTile(
+                      title: Text(
+                        month.toString().toUpperCase(),
+                        style: const TextStyle(
+                            fontWeight: FontWeight.bold, fontSize: 18),
+                      ),
+                      subtitle: Text(
+                        status == "paid"
+                            ? "Paid (Txn ID: $transactionId)"
+                            : "Pending",
+                        style: TextStyle(
+                          color: status == "paid" ? Colors.green : Colors.red,
+                        ),
+                      ),
+                      trailing: ElevatedButton(
+                        onPressed: status == "paid"
+                            ? null
+                            : () {
+                                openCheckout(
+                                  month: fee["month"],
+                                  year: now.year,
+                                  amount: feeAmount,
+                                );
+                              },
+                        child: const Text("Pay Now"),
                       ),
                     ),
-                    trailing: ElevatedButton(
-                      onPressed: status == "paid"
-                          ? null
-                          : () {
-                              openCheckout(
-                                month: fee["month"],
-                                year: now.year,
-                                amount: feeAmount,
-                              );
-                            },
-                      child: const Text("Pay Now"),
-                    ),
-                  ),
-                );
-              },
-            ),
+                  );
+                },
+              ),
+          ),
     );
   }
 }
