@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:frontend/constants/url.dart';
 import 'package:frontend/provider/user_data_provider.dart';
 import 'package:frontend/screens/chat/broadcast_screen.dart';
 import 'package:frontend/screens/widgets/greetingWidget.dart';
@@ -33,7 +34,7 @@ class _ClassListScreenState extends State<ClassListScreen> {
   Future<void> fetchClasses() async {
     try {
       // print("Token: ${widget.authToken}");
-      final url = Uri.parse('http://192.168.0.131:8000/api/classes/get-classes');
+      final url = Uri.parse('${URL.chatURL}/api/classes/get-classes');
       final res = await http.get(url,
         headers: {'Authorization': 'Bearer ${widget.authToken}'});
 
