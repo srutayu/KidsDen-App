@@ -145,7 +145,7 @@ class _PaymentPageState extends State<PaymentPage> {
       {required String month, required int year, required int amount}) async {
     try {
       var orderData =
-          await createOrder(month: month, year: year, amount: amount);
+          await createOrder(month: month.toLowerCase(), year: year, amount: amount);
       print(orderData['orderId']);
       var option = {
         'key': 'rzp_test_R8QSaxxVvHJ8Ko',
