@@ -2,6 +2,9 @@ const Class = require('../models/classModel');
 const Fees = require('../models/feesModel');
 const User = require('../models/userModel');
 
+const Message = require('../../chatbackend/models/messageModel');
+const Payment = require('../models/paymentModel');
+
 //create contoller to create a class and all admin to list of teachers. 
 
 exports.createClass = async (req, res) => {
@@ -137,8 +140,17 @@ exports.deleteClass = async (req, res) => {
             return res.status(404).json({ message: 'Class not found' });
         }
 
-        await Class.findByIdAndDelete(classId);
-        await Fees.findOneAndDelete({ classId: classObj.name });
+        await Promise.all([
+            Class.findByIdAndDelete(classId),
+            Fees.findOneAndDelete({ classId: classObj.name }),
+            User.updateMany(
+                { assignedClasses: classObj.name },
+                { $pull: { assignedClasses: classObj.name } }
+            ),
+            Message.deleteMany({ classId }),
+            Payment.deleteMany({ classId: classObj.name })
+        ]);
+
 
         res.status(200).json({ message: 'Class and associated fees deleted successfully' });
 
