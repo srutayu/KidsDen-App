@@ -29,50 +29,69 @@ class _StudentPageState extends State<StudentPage> {
     _pages = [ClassListScreen(authToken: token), PaymentPage()];
   }
 
+  Future<void> _handleLogout() async {
+    try {
+      await storage.deleteAll();
+      final value = await AuthController.logout(token);
+      if (value) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const OnboardingPage(),
+          ),
+        );
+      } else {
+        print("Logout Failed");
+      }
+    } catch (error) {
+      print("Logout Error: $error");
+    }
+  }
+
+    Future<void> _handleBackPressed(bool didPop, Object? result) async {
+    if (selectedIndex == 1) {
+      // If on second page, go back to first page
+      setState(() {
+        selectedIndex = 0;
+      });
+    }
+    else if (selectedIndex==0){
+      _handleLogout();
+    }
+    // Otherwise, let the system handle the back (e.g., exit app)
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: const Color.fromARGB(255, 52, 161, 88),
-        title: Text('Student Dashboard'),
-        centerTitle: true,
-        automaticallyImplyLeading: false,
-        actions: [
-          IconButton(
-              onPressed: () async {
-                try {
-                  await storage.deleteAll();
-                  final value = await AuthController.logout(token);
-                  if (value) {
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => OnboardingPage(),
-                      ),
-                    );
-                  } else {
-                    print("Logout Failed");
-                  }
-                } catch (error) {
-                  print("Logout Error: $error");
-                }
-              },
-              icon: Icon(Icons.logout))
-        ],
-      ),
-      body: _pages[selectedIndex],
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        onTap: (index) {
-          setState(() {
-            selectedIndex = index;
-          });
-        },
-        currentIndex: selectedIndex,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Class Chat'),
-          BottomNavigationBarItem(icon: Icon(Icons.payment), label: 'Pay Fees'),
-        ],
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: _handleBackPressed,
+      child: Scaffold(
+        appBar: AppBar(
+          backgroundColor: const Color.fromARGB(255, 52, 161, 88),
+          title: Text('Student Dashboard'),
+          centerTitle: true,
+          automaticallyImplyLeading: false,
+          actions: [
+            IconButton(
+                onPressed: _handleLogout,
+                icon: Icon(Icons.logout))
+          ],
+        ),
+        body: _pages[selectedIndex],
+        bottomNavigationBar: BottomNavigationBar(
+          type: BottomNavigationBarType.fixed,
+          onTap: (index) {
+            setState(() {
+              selectedIndex = index;
+            });
+          },
+          currentIndex: selectedIndex,
+          items: const [
+            BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Class Chat'),
+            BottomNavigationBarItem(icon: Icon(Icons.payment), label: 'Pay Fees'),
+          ],
+        ),
       ),
     );
   }
