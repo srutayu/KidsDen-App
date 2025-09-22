@@ -86,4 +86,25 @@ class AuthController {
       throw Exception("Failed to load approval status");
     }
   }
+
+  static Future<int> getLoginDate(String token) async {
+    final url = Uri.parse('$_baseURL/get-role');
+
+    final response = await http.get(
+      url,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token', 
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      final loginDate = (data['logindate']);
+      return loginDate;
+    }
+    else {
+      throw Exception("Failed to fetch login date");
+    }
+  }
 }

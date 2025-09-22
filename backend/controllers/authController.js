@@ -182,7 +182,7 @@ exports.getRoleAndTimefromToken = (req, res) => {
         let loginDate = null, loginTime = null;
         if (decoded.iat) {
             const loginDateObj = new Date(decoded.iat * 1000);
-            loginDate = loginDateObj.toISOString().split('T')[0]; // YYYY-MM-DD
+            loginDate = decoded.iat; // YYYY-MM-DD
             loginTime = loginDateObj.toTimeString().split(' ')[0]; // HH:MM:SS
         }
         return res.status(200).json({ id, role, loginDate, loginTime });
