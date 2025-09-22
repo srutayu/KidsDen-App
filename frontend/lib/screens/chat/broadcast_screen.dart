@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:frontend/constants/url.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
@@ -28,7 +29,7 @@ class _BroadcastScreenState extends State<BroadcastScreen> {
   }
 
   Future<void> fetchClasses() async {
-    final url = 'http://192.168.0.131:8000/api/classes/get-classes';  // Update endpoints
+    final url = '${URL.chatURL}/api/classes/get-classes';
     final res = await http.get(
       Uri.parse(url),
       headers: {'Authorization': 'Bearer ${widget.authToken}'},
@@ -47,7 +48,7 @@ class _BroadcastScreenState extends State<BroadcastScreen> {
     setState(() => isSending = true);
 
     final response = await http.post(
-      Uri.parse('http://192.168.0.131:8000/api/classes/broadcast-message'),
+      Uri.parse('${URL.chatURL}/api/classes/broadcast-message'),
       headers: {
         'Authorization': 'Bearer ${widget.authToken}',
         'Content-Type': 'application/json',

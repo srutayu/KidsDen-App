@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:frontend/constants/url.dart';
 import 'package:frontend/provider/user_data_provider.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -47,7 +48,7 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       final res = await http.get(
         Uri.parse(
-            'http://192.168.0.131:8000/api/classes/get-user-role?userId=$currentUserId'),
+            '${URL.chatURL}/api/classes/get-user-role?userId=$currentUserId'),
         headers: {'Authorization': 'Bearer ${widget.authToken}'},
       );
       if (res.statusCode == 200) {
@@ -65,7 +66,7 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       final res = await http.get(
         Uri.parse(
-            'http://192.168.0.131:8000/api/classes/get-messages?classId=${widget.classId}'),
+            '${URL.chatURL}/api/classes/get-messages?classId=${widget.classId}'),
         headers: {'Authorization': 'Bearer ${widget.authToken}'},
       );
 
@@ -81,7 +82,7 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void initSocket() {
-    socket = IO.io('http://192.168.0.131:8000', <String, dynamic>{
+    socket = IO.io(URL.socketURL, <String, dynamic>{
       'transports': ['websocket'],
       'autoConnect': false,
       'auth': {'token': widget.authToken}
@@ -138,7 +139,7 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       final response = await http.get(
         Uri.parse(
-            'http://192.168.0.131:8000/api/classes/get-user-name?userId=$userId'),
+            '${URL.chatURL}/api/classes/get-user-name?userId=$userId'),
         headers: {
           'Authorization': 'Bearer ${widget.authToken}',
           'Content-Type': 'application/json',
