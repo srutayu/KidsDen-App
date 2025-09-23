@@ -49,7 +49,7 @@ if (cluster.isMaster) {
     app.use('/api/class', require('./routes/classRoutes'));
     app.use('/api/teacher', require('./routes/teacherRoutes'));
     app.use('/api/adminteacher', require('./routes/adminteacherRoutes'));
-    app.use('/api/adminstudent', require('./routes/adminstudentRoutes'));
+    app.use('/api/adminstudent', require('./routes/adminStudentRoutes'));
 
     app.use(errorHandler);
 
