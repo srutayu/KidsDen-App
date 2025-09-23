@@ -2,6 +2,14 @@ const Class = require('../models/classModel');
 const Fees = require('../models/feesModel');
 const User = require('../models/userModel');
 
+// Chat DB connection and Message model setup
+const mongoose = require('mongoose');
+const connectChatDB = require('../config/chatdb');
+const messageSchema = require('../models/messageSchema');
+let ChatMessage;
+let chatDbConnected = false;
+const Payment = require('../models/paymentModel');
+
 //create contoller to create a class and all admin to list of teachers. 
 
 exports.createClass = async (req, res) => {
@@ -137,10 +145,30 @@ exports.deleteClass = async (req, res) => {
             return res.status(404).json({ message: 'Class not found' });
         }
 
-        await Class.findByIdAndDelete(classId);
-        await Fees.findOneAndDelete({ classId: classObj.name });
 
-        res.status(200).json({ message: 'Class and associated fees deleted successfully' });
+        if (!chatDbConnected) {
+            // Use a separate connection for chat DB
+            const chatConn = await mongoose.createConnection(process.env.MONGO_URI, {
+                useNewUrlParser: true,
+                useUnifiedTopology: true
+            });
+            ChatMessage = chatConn.model('Message', messageSchema);
+            chatDbConnected = true;
+        }
+
+        await Promise.all([
+            Class.findByIdAndDelete(classId),
+            Fees.findOneAndDelete({ classId: classObj.name }),
+            User.updateMany(
+                { assignedClasses: classObj.name },
+                { $pull: { assignedClasses: classObj.name } }
+            ),
+            ChatMessage.deleteMany({ classId }),
+            Payment.deleteMany({ classId: classObj.name })
+        ]);
+
+
+        res.status(200).json({ message: 'Class and associated fees and messages deleted successfully' });
 
     } catch (error) {
         console.error(error);
