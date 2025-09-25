@@ -48,7 +48,7 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       final res = await http.get(
         Uri.parse(
-            '${URL.chatURL}/api/classes/get-user-role?userId=$currentUserId'),
+            '${URL.chatURL}/classes/get-user-role?userId=$currentUserId'),
         headers: {'Authorization': 'Bearer ${widget.authToken}'},
       );
       if (res.statusCode == 200) {
@@ -66,7 +66,7 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       final res = await http.get(
         Uri.parse(
-            '${URL.chatURL}/api/classes/get-messages?classId=${widget.classId}'),
+            '${URL.chatURL}/classes/get-messages?classId=${widget.classId}'),
         headers: {'Authorization': 'Bearer ${widget.authToken}'},
       );
 
@@ -139,7 +139,7 @@ class _ChatScreenState extends State<ChatScreen> {
     try {
       final response = await http.get(
         Uri.parse(
-            '${URL.chatURL}/api/classes/get-user-name?userId=$userId'),
+            '${URL.chatURL}/classes/get-user-name?userId=$userId'),
         headers: {
           'Authorization': 'Bearer ${widget.authToken}',
           'Content-Type': 'application/json',
