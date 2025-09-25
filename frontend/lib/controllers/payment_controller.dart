@@ -96,7 +96,6 @@ class GetFeesController{
     );
 
     if(response.statusCode == 200) {
-      Map<String, dynamic> jsonMap = jsonDecode(response.body);
       return true;
     } else  {
       throw Exception("Error updating cash payment, ${response.statusCode}");

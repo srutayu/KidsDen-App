@@ -34,7 +34,7 @@ class _ClassListScreenState extends State<ClassListScreen> {
   Future<void> fetchClasses() async {
     try {
       // print("Token: ${widget.authToken}");
-      final url = Uri.parse('${URL.chatURL}/api/classes/get-classes');
+      final url = Uri.parse('${URL.chatURL}/classes/get-classes');
       final res = await http.get(url,
         headers: {'Authorization': 'Bearer ${widget.authToken}'});
 
