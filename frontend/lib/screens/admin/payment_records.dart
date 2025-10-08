@@ -186,6 +186,9 @@ class _PaymentRecordsContentState extends State<PaymentRecordsContent> {
   void fetchClasses() async {
     List<String> fetchedClasses =
         await ClassController.getClasses(widget.token);
+    
+    if (!mounted) return;
+    
     setState(() {
       classes = fetchedClasses;
       if (classes.isNotEmpty) {
@@ -304,18 +307,21 @@ class _PaymentRecordsContentState extends State<PaymentRecordsContent> {
 
           listOfUnpaidStudent = namedStudents['unpaid']!;
           listOfPendingStudent = namedStudents['pending']!;
-          // print(listOfPendingStudent);
         });
       } else {
         throw Exception('Failed to load payment status');
       }
     } catch (e) {
       debugPrint("Error fetching payment status: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error fetching payment data')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error fetching payment data')),
+        );
+      }
     } finally {
-      setState(() => loading = false);
+      if (mounted) {
+        setState(() => loading = false);
+      }
     }
   }
 
