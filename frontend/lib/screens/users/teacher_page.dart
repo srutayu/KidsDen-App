@@ -37,14 +37,16 @@ class _TeacherPageState extends State<TeacherPage> {
     });
   }
 
-  Future<void> logout() async {
+  Future<void> _handleLogout() async {
     try {
       await storage.deleteAll();
       final value = await AuthController.logout(token);
       if (value) {
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => OnboardingPage()),
+          MaterialPageRoute(
+            builder: (context) => const OnboardingPage(),
+          ),
         );
       } else {
         print("Logout Failed");
@@ -53,28 +55,42 @@ class _TeacherPageState extends State<TeacherPage> {
       print("Logout Error: $error");
     }
   }
+  Future<void> _handleBackPressed(bool didPop, Object? result) async {
+    if (selectedIndex == 1 ) {
+      setState(() {
+        selectedIndex = 0;
+      });
+    }
+    else if (selectedIndex==0){
+      _handleLogout();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text("Teacher Dashboard"),
-        centerTitle: true,
-        automaticallyImplyLeading: false,
-        backgroundColor: const Color.fromARGB(255, 52, 161, 88),
-        actions: [
-          IconButton(onPressed: logout, icon: const Icon(Icons.logout)),
-        ],
-      ),
-      body: _pages[selectedIndex],
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        currentIndex: selectedIndex,
-        onTap: onItemTapped,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Class Chats'),
-          BottomNavigationBarItem(icon: Icon(Icons.school), label: 'Students'),
-        ],
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: _handleBackPressed,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text("Teacher Dashboard"),
+          centerTitle: true,
+          automaticallyImplyLeading: false,
+          backgroundColor: const Color.fromARGB(255, 52, 161, 88),
+          actions: [
+            IconButton(onPressed: _handleLogout, icon: const Icon(Icons.logout)),
+          ],
+        ),
+        body: _pages[selectedIndex],
+        bottomNavigationBar: BottomNavigationBar(
+          type: BottomNavigationBarType.fixed,
+          currentIndex: selectedIndex,
+          onTap: onItemTapped,
+          items: const [
+            BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Class Chats'),
+            BottomNavigationBarItem(icon: Icon(Icons.school), label: 'Students'),
+          ],
+        ),
       ),
     );
   }
