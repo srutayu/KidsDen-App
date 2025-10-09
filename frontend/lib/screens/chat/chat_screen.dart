@@ -110,24 +110,23 @@ class _ChatScreenState extends State<ChatScreen> {
       if (mounted) {
         setState(() {
           // Check if message already exists to prevent duplicates
-          bool messageExists = messages.any((msg) =>
-          msg['_id'] == data['_id'] ||
-              (msg['content'] == data['content'] &&
-                  msg['sender'] == data['sender'] &&
-                  msg['timestamp'] == data['timestamp'])
+          bool messageExists = messages.any((msg) => 
+            msg['_id'] == data['_id']
           );
-
+          
           if (!messageExists) {
             // Ensure consistent message structure
             final formattedMessage = {
               '_id': data['_id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
-              'content': data['content'] ?? data['message'], // Handle both field names
+              'content': data['content'],
               'sender': data['sender'],
               'senderRole': data['senderRole'],
-              'timestamp': data['timestamp'] ?? DateTime.now().toIso8601String(),
+              'timestamp': data['timestamp'],
               'classId': data['classId'],
             };
             messages.add(formattedMessage);
+            // Sort messages by timestamp to maintain order
+            messages.sort((a, b) => DateTime.parse(a['timestamp']).compareTo(DateTime.parse(b['timestamp'])));
           }
         });
       }
@@ -135,7 +134,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
     socket.on('typing', (data) {
       print('Received typing event: $data');
-      if (mounted) {
+      if (mounted && data['sender'] != currentUserId) { // Only show if not current user
         setState(() {
           isTyping = data['isTyping'] ?? false;
         });
@@ -166,9 +165,10 @@ class _ChatScreenState extends State<ChatScreen> {
 }
 
   void sendTyping(bool typing) {
-    if (socket.connected) {
+    if (socket.connected && currentUserId != null) {
       socket.emit('typing', {
         'classId': widget.classId,
+        'sender': currentUserId, // Include sender ID
         'isTyping': typing,
       });
     }
