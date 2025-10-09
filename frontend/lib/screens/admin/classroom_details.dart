@@ -39,52 +39,48 @@ class _ClassroomDetailsState extends State<ClassroomDetails> {
     _initializeData();
   }
 
- Future<void> _initializeData() async {
-  try {
-    final classes = await _controller.getAllClasses(token);
-    if (!mounted) return; // <- safeguard
-
-    if (classes.isNotEmpty) {
-      _selectedClass = classes[0];
-      await _loadClassMembers(_selectedClass!.id);
-      if (!mounted) return; // <- safeguard after async
-    }
-
-    if (mounted) {
+  Future<void> _initializeData() async {
+    try {
+      final classes = await _controller.getAllClasses(token);
+      if (classes.isNotEmpty) {
+        _selectedClass = classes[0];
+        await _loadClassMembers(_selectedClass!.id);
+      }
       setState(() {
         _classes = classes;
         _loading = false;
       });
-    }
-  } catch (e) {
-    if (mounted) {
+    } catch (e) {
       setState(() => _loading = false);
       _showError('Failed to load classes: $e');
     }
   }
+
+Future<void> _loadClassMembers(String classId) async {
+  if (!mounted) return;
+  setState(() => _loading = true);
+
+  try {
+    final teachers = await _controller.getTeacherInClass(classId, token);
+    final students = await _controller.getStudentsInClass(classId, token);
+    final teachersNotIn = await _controller.getTeachersNotInClass(classId, token);
+    final studentsNotIn = await _controller.getStudentsNotInClass(classId, token);
+
+    if (!mounted) return; // ensure widget is still active before setState
+    setState(() {
+      _teachersInClass = teachers;
+      _studentsInClass = students;
+      _teachersNotInClass = teachersNotIn;
+      _studentsNotInClass = studentsNotIn;
+      _loading = false;
+    });
+  } catch (e) {
+    if (!mounted) return;
+    setState(() => _loading = false);
+    _showError('Failed to load class members: $e');
+  }
 }
 
-
-  Future<void> _loadClassMembers(String classId) async {
-    setState(() => _loading = true);
-    try {
-      final teachers = await _controller.getTeacherInClass(classId, token);
-      final students = await _controller.getStudentsInClass(classId, token);
-      final teachersNotIn = await _controller.getTeachersNotInClass(classId, token);
-      final studentsNotIn = await _controller.getStudentsNotInClass(classId, token);
-
-      setState(() {
-        _teachersInClass = teachers;
-        _studentsInClass = students;
-        _teachersNotInClass = teachersNotIn;
-        _studentsNotInClass = studentsNotIn;
-        _loading = false;
-      });
-    } catch (e) {
-      setState(() => _loading = false);
-      _showError('Failed to load class members: $e');
-    }
-  }
 
   void _showError(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
