@@ -85,53 +85,100 @@ class _ChatScreenState extends State<ChatScreen> {
     socket = IO.io(URL.socketURL, <String, dynamic>{
       'transports': ['websocket'],
       'autoConnect': false,
-      'auth': {'token': widget.authToken}
+      'auth': {'token': widget.authToken},
+      'forceNew': true,
     });
 
     socket.connect();
 
     socket.onConnect((_) {
-      print('connected');
+      print('Socket connected');
+      // Join the specific class room to receive messages for this class
+      socket.emit('join-room', widget.classId);
+    });
+
+    socket.onDisconnect((_) {
+      print('Socket disconnected');
+    });
+
+    socket.onConnectError((error) {
+      print('Socket connection error: $error');
     });
 
     socket.on('message', (data) {
-      setState(() {
-        messages.add(data);
-      });
+      print('Received message: $data');
+      if (mounted) {
+        setState(() {
+          // Check if message already exists to prevent duplicates
+          bool messageExists = messages.any((msg) =>
+          msg['_id'] == data['_id'] ||
+              (msg['content'] == data['content'] &&
+                  msg['sender'] == data['sender'] &&
+                  msg['timestamp'] == data['timestamp'])
+          );
+
+          if (!messageExists) {
+            // Ensure consistent message structure
+            final formattedMessage = {
+              '_id': data['_id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
+              'content': data['content'] ?? data['message'], // Handle both field names
+              'sender': data['sender'],
+              'senderRole': data['senderRole'],
+              'timestamp': data['timestamp'] ?? DateTime.now().toIso8601String(),
+              'classId': data['classId'],
+            };
+            messages.add(formattedMessage);
+          }
+        });
+      }
     });
 
     socket.on('typing', (data) {
-      setState(() {
-        isTyping = data['isTyping'] ?? false;
-      });
+      print('Received typing event: $data');
+      if (mounted) {
+        setState(() {
+          isTyping = data['isTyping'] ?? false;
+        });
+      }
     });
   }
 
  void sendMessage(String msg) {
   if (msg.trim().isEmpty) return;
   if (currentUserId == null) return;
+  
+  if (!socket.connected) {
+    print('Socket not connected, attempting to reconnect...');
+    socket.connect();
+    return;
+  }
+  
+  print('Sending message: $msg');
   socket.emit('message', {
     'classId': widget.classId,
     'message': msg,
     'sender': currentUserId,
   });
 
-  setState(() {
-    messages.add({
-      'content': msg,
-      'sender': currentUserId,
-      'timestamp': DateTime.now().toUtc().toIso8601String(),
-    });
-  });
-
+  // Don't add the message locally immediately - wait for the server to echo it back
+  // This prevents duplicate messages and ensures proper ordering
   _controller.clear();
 }
 
   void sendTyping(bool typing) {
-    socket.emit('typing', {
-      'classId': widget.classId,
-      'isTyping': typing,
-    });
+    if (socket.connected) {
+      socket.emit('typing', {
+        'classId': widget.classId,
+        'isTyping': typing,
+      });
+    }
+  }
+
+  void checkConnection() {
+    if (!socket.connected) {
+      print('Socket not connected, attempting to reconnect...');
+      socket.connect();
+    }
   }
 
   Future<void> loadUserNameIfNeeded(String userId) async {
@@ -206,7 +253,7 @@ class _ChatScreenState extends State<ChatScreen> {
           children: [
             // Message text
             Text(
-              msg['content'],
+              msg['content'] ?? '',
               style: const TextStyle(fontSize: 16),
             ),
             const SizedBox(height: 4),
@@ -225,7 +272,8 @@ class _ChatScreenState extends State<ChatScreen> {
                 ),
                 SizedBox(width: 10),
                 Text(
-                 DateFormat('h:mma').format(DateTime.parse(msg['timestamp']).toLocal()).toLowerCase(),
+                 msg['timestamp'] != null 
+                 ? DateFormat('h:mma').format(DateTime.parse(msg['timestamp']).toLocal()).toLowerCase() : '',
                   style: const TextStyle(
                     fontSize: 10,
                     color: Colors.black38,
