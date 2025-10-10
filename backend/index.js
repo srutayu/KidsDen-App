@@ -40,6 +40,16 @@ if (cluster.isMaster) {
       res.send('School Management Backend is running');
     });
 
+    // Health check endpoint for Docker
+    app.get('/health', (req, res) => {
+      res.status(200).json({
+        status: 'healthy',
+        service: 'backend',
+        timestamp: new Date().toISOString(),
+        port: port
+      });
+    });
+
     app.use('/api/auth', require('./routes/authRoutes'));
     app.use('/api/admin', require('./routes/adminRoutes'));
     app.use('/api/payment', require('./routes/paymentRoutes.js'));

@@ -1,4 +1,4 @@
-export function authorize(...allowedRoles) {
+function authorize(...allowedRoles) {
   return (req, res, next) => {
     if (!req.user || !allowedRoles.includes(req.user.role)) {
       return res.status(403).json({ message: 'Access denied' });
@@ -6,3 +6,5 @@ export function authorize(...allowedRoles) {
     next();
   };
 }
+
+module.exports = { authorize };

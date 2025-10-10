@@ -1,7 +1,11 @@
-import {Kafka} from "kafkajs"
+const {Kafka} = require("kafkajs");
 
-const kafka = new Kafka({
-    brokers: ['localhost:9092'],
-});
+let kafka = null;
 
-export default kafka;
+if (process.env.KAFKA_DISABLED !== 'true') {
+    kafka = new Kafka({
+        brokers: [process.env.KAFKA_BROKERS || 'localhost:9092'],
+    });
+}
+
+module.exports = kafka;
