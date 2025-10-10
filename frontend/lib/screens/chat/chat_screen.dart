@@ -109,9 +109,13 @@ class _ChatScreenState extends State<ChatScreen> {
       print('Received message: $data');
       if (mounted) {
         setState(() {
-          // Check if message already exists to prevent duplicates
+          // Check if message already exists to prevent duplicates using multiple criteria
           bool messageExists = messages.any((msg) => 
-            msg['_id'] == data['_id']
+            msg['_id'] == data['_id'] ||
+            (msg['content'] == data['content'] && 
+             msg['sender'] == data['sender'] && 
+             (msg['timestamp'] != null && data['timestamp'] != null &&
+              DateTime.parse(msg['timestamp']).difference(DateTime.parse(data['timestamp'])).abs().inSeconds < 5))
           );
           
           if (!messageExists) {
@@ -159,9 +163,8 @@ class _ChatScreenState extends State<ChatScreen> {
     'sender': currentUserId,
   });
 
-  // Don't add the message locally immediately - wait for the server to echo it back
-  // This prevents duplicate messages and ensures proper ordering
   _controller.clear();
+  sendTyping(false); // Stop typing indicator when message is sent
 }
 
   void sendTyping(bool typing) {
