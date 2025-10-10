@@ -6,7 +6,7 @@ const messageSchema = new mongoose.Schema({
         required: true,
         ref: 'Class'
     },
-    senderId: {
+    sender: { // Changed from senderId to sender
         type: mongoose.Schema.Types.ObjectId,
         required: true,
         ref: 'User'
