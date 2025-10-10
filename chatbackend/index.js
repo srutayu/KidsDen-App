@@ -45,21 +45,18 @@ sub.on('message', (channel, message) => {
   if (channel === 'chatMessages') {
     const data = JSON.parse(message);
     const room = `class_${data.classId}`;
-    const clients = io.sockets.adapter.rooms.get(room);
-    if (clients) {
-      clients.forEach(socketId => {
-        const role = socketRoles.get(socketId);
-        // Only emit to sockets with a different role than sender
-        if (role && role !== data.senderRole && socketId !== data.sender) {
-          io.to(socketId).emit('message', {
-            classId: data.classId,
-            message: data.message,
-            sender: data.sender,
-            senderRole: data.senderRole
-          });
-        }
-      });
-    }
+    
+    // Send message to ALL users in the room
+    io.to(room).emit('message', {
+      _id: data._id,
+      classId: data.classId,
+      content: data.message, // Send as 'content' to match frontend expectation
+      sender: data.sender,
+      senderRole: data.senderRole,
+      timestamp: data.timestamp
+    });
+    
+    console.log(`Message sent to room ${room}:`, data.message);
   }
 });
 
@@ -88,17 +85,36 @@ io.on('connection', async (socket) => {
     return;
   }
   
-  socket.on('message', async (data) => {
-    if (canSendMessage(user, data.classId)) {
-        // console.log('Message sent to class:', data.message);
-      await pub.publish('chatMessages', JSON.stringify({ classId: data.classId, message: data.message, sender: data.sender, senderRole: user.role }));
-      await produceMessage(data, data.sender);
-    //   console.log('Message produced to Kafka:', data.message);
-    //   await saveMessageToDB({ classId: data.classId, sender: user.user._id.toString(), content: data.message });
-    //   console.log('Message processed for class:', data.classId, 'by user:', user.user._id.toString(), 'with role:', user.role);
-
-    }
-  });
+socket.on('message', async (data) => {
+  if (canSendMessage(user, data.classId)) {
+    const messageData = {
+      _id: new Date().getTime().toString(), // Use timestamp as ID
+      classId: data.classId,
+      message: data.message,
+      sender: data.sender,
+      senderRole: user.role,
+      timestamp: new Date().toISOString()
+    };
+    
+    // First save to database
+    // try {
+    //   const Message = require('./models/messageModel'); // Make sure you have this model
+    //   await Message.create({
+    //     classId: data.classId,
+    //     sender: data.sender,
+    //     content: data.message,
+    //     timestamp: new Date()
+    //   });
+    // } catch (error) {
+    //   console.error('Error saving message to DB:', error);
+    // }
+    
+    // Then broadcast via Redis
+    await pub.publish('chatMessages', JSON.stringify(messageData));
+    await produceMessage(data, data.sender);
+    console.log('Message published for class:', data.classId, 'by user:', data.sender);
+  }
+});
 
   socket.on('disconnect', () => {
     // console.log('User disconnected:', user.user._id.toString());

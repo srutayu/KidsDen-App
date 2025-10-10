@@ -378,6 +378,7 @@ exports.getStudentsNotInAnyClass = async (req, res) => {
         // Find students not in any class
         const studentsNotInAnyClass = await User.find({
             role: 'student',
+            isApproved: true,
             _id: { $nin: Array.from(assignedStudentIds) }
         }).select('_id name email');
 

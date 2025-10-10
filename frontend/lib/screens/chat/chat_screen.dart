@@ -85,53 +85,103 @@ class _ChatScreenState extends State<ChatScreen> {
     socket = IO.io(URL.socketURL, <String, dynamic>{
       'transports': ['websocket'],
       'autoConnect': false,
-      'auth': {'token': widget.authToken}
+      'auth': {'token': widget.authToken},
+      'forceNew': true,
     });
 
     socket.connect();
 
     socket.onConnect((_) {
-      print('connected');
+      print('Socket connected');
+      // Join the specific class room to receive messages for this class
+      socket.emit('join-room', widget.classId);
+    });
+
+    socket.onDisconnect((_) {
+      print('Socket disconnected');
+    });
+
+    socket.onConnectError((error) {
+      print('Socket connection error: $error');
     });
 
     socket.on('message', (data) {
-      setState(() {
-        messages.add(data);
-      });
+      print('Received message: $data');
+      if (mounted) {
+        setState(() {
+          // Check if message already exists to prevent duplicates using multiple criteria
+          bool messageExists = messages.any((msg) => 
+            msg['_id'] == data['_id'] ||
+            (msg['content'] == data['content'] && 
+             msg['sender'] == data['sender'] && 
+             (msg['timestamp'] != null && data['timestamp'] != null &&
+              DateTime.parse(msg['timestamp']).difference(DateTime.parse(data['timestamp'])).abs().inSeconds < 5))
+          );
+          
+          if (!messageExists) {
+            // Ensure consistent message structure
+            final formattedMessage = {
+              '_id': data['_id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
+              'content': data['content'],
+              'sender': data['sender'],
+              'senderRole': data['senderRole'],
+              'timestamp': data['timestamp'],
+              'classId': data['classId'],
+            };
+            messages.add(formattedMessage);
+            // Sort messages by timestamp to maintain order
+            messages.sort((a, b) => DateTime.parse(a['timestamp']).compareTo(DateTime.parse(b['timestamp'])));
+          }
+        });
+      }
     });
 
     socket.on('typing', (data) {
-      setState(() {
-        isTyping = data['isTyping'] ?? false;
-      });
+      print('Received typing event: $data');
+      if (mounted && data['sender'] != currentUserId) { // Only show if not current user
+        setState(() {
+          isTyping = data['isTyping'] ?? false;
+        });
+      }
     });
   }
 
  void sendMessage(String msg) {
   if (msg.trim().isEmpty) return;
   if (currentUserId == null) return;
+  
+  if (!socket.connected) {
+    print('Socket not connected, attempting to reconnect...');
+    socket.connect();
+    return;
+  }
+  
+  print('Sending message: $msg');
   socket.emit('message', {
     'classId': widget.classId,
     'message': msg,
     'sender': currentUserId,
   });
 
-  setState(() {
-    messages.add({
-      'content': msg,
-      'sender': currentUserId,
-      'timestamp': DateTime.now().toUtc().toIso8601String(),
-    });
-  });
-
   _controller.clear();
+  sendTyping(false); // Stop typing indicator when message is sent
 }
 
   void sendTyping(bool typing) {
-    socket.emit('typing', {
-      'classId': widget.classId,
-      'isTyping': typing,
-    });
+    if (socket.connected && currentUserId != null) {
+      socket.emit('typing', {
+        'classId': widget.classId,
+        'sender': currentUserId, // Include sender ID
+        'isTyping': typing,
+      });
+    }
+  }
+
+  void checkConnection() {
+    if (!socket.connected) {
+      print('Socket not connected, attempting to reconnect...');
+      socket.connect();
+    }
   }
 
   Future<void> loadUserNameIfNeeded(String userId) async {

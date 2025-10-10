@@ -60,7 +60,7 @@ exports.getUserDetails = async (req, res) => {
 }
 
 
-//getMessages by classId
+// getMessages by classId
 
 exports.getMessages = async (req, res) => {
     try {
@@ -82,6 +82,29 @@ exports.getMessages = async (req, res) => {
 
 }
 
+
+// exports.getMessages = async (req, res) => {a
+//      try {
+//     const { classId } = req.query;
+//     const messages = await Message.find({ classId })
+//       .populate('sender', 'name')
+//       .sort({ timestamp: 1 });
+    
+//     // Format messages to match frontend expectation
+//     const formattedMessages = messages.map(msg => ({
+//       _id: msg._id.toString(),
+//       content: msg.content,
+//       sender: msg.sender._id.toString(),
+//       senderName: msg.sender.name,
+//       timestamp: msg.timestamp.toISOString(),
+//       classId: msg.classId.toString()
+//     }));
+    
+//     res.json(formattedMessages);
+//   } catch (error) {
+//     res.status(500).json({ error: error.message });
+//   }
+// }
 
 exports.getUserNameById = async (req, res) => {
     try {
