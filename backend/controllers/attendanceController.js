@@ -62,7 +62,6 @@ exports.takeAttendance = async (req, res) => {
 
 //get attendance for a class on a specific date
 
-//send user id, name and attendance status
 exports.getAttendance = async (req, res) => {
     try {
         const { classId, date } = req.query;
@@ -73,13 +72,11 @@ exports.getAttendance = async (req, res) => {
             return res.status(400).json({ message: 'date is required' });
         }
 
-        // Find attendance records and populate user name
         const attendanceRecords = await attendanceModel
             .find({ classId, date: normalizeDateToDay(date) })
             .populate('userId', 'name')
             .lean();
 
-        // Map attendance records to include user details (userId, name, attendance)
         const attendanceWithDetails = attendanceRecords.map(record => {
             const user = record.userId;
             const userId = user && (user._id || user) ? String(user._id || user) : String(record.userId);
@@ -94,6 +91,26 @@ exports.getAttendance = async (req, res) => {
         return res.status(200).json({ attendance: attendanceWithDetails });
     } catch (error) {
         console.error('Error fetching attendance:', error);
+        return res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
+// Check whether attendance for a class on a given date has already been taken
+exports.checkAttendance = async (req, res) => {
+    try {
+        const { classId, date } = req.query;
+        if (!classId) {
+            return res.status(400).json({ message: 'classId is required' });
+        }
+        if (!date) {
+            return res.status(400).json({ message: 'date is required' });
+        }
+
+        const count = await attendanceModel.countDocuments({ classId, date: normalizeDateToDay(date) });
+
+        return res.status(200).json({ attendance_taken: count > 0 });
+    } catch (error) {
+        console.error('Error checking attendance:', error);
         return res.status(500).json({ message: 'Server error', error: error.message });
     }
 };
