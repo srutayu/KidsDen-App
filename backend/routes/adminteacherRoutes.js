@@ -15,7 +15,6 @@ router.get('/get-student-not-in-any-class', getStudentsNotInAnyClass);
 // Attendance routes
 router.post('/take-attendance', takeAttendance);
 router.get('/get-attendance', getAttendance);
-router.get('/check-attendance', checkAttendance);
 
 module.exports = router;
 
