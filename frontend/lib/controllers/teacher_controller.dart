@@ -120,4 +120,32 @@ class TeacherController {
       throw Exception("Failed to load students");
     }
   }
+
+  Future<void> submitAttendance({
+    required String token,
+    required String classId,
+    required String date,
+    required List<Map<String, String>> attendance,
+  }) async {
+    final url = Uri.parse('$_baseURL/adminteacher/take-attendance');
+
+    final body = {
+      'classId': classId,
+      'date': date,
+      'attendance': attendance,
+    };
+
+    final response = await http.post(
+      url,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode(body),
+    );
+
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception('Failed to submit attendance: ${response.body}');
+    }
+  }
 }

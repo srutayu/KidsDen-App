@@ -52,6 +52,7 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   shimmer: ^3.0.0
+  dropdown_button2: ^2.3.9
 
 
 

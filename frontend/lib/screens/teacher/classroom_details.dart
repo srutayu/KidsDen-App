@@ -142,38 +142,40 @@ class _ClassroomDetailsTeacherState extends State<ClassroomDetailsTeacher> {
 
   Widget _buildStudentList() {
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Students',
-                    style:
-                        TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                ElevatedButton.icon(
-                  onPressed: _studentsNotInClass.isEmpty
-                      ? null
-                      : _showAddStudentDialog,
-                  icon: const Icon(Icons.add),
-                  label: const Text('Add Student'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            if (_studentsInClass.isEmpty)
-              const Text('No students in this class')
-            else
-              ..._studentsInClass.map((student) => ListTile(
-                    title: Text(student.name),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete, color: Colors.red),
-                      onPressed: () => _removeStudent(student),
-                    ),
-                  )),
-          ],
+      child: SingleChildScrollView(
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text('Students',
+                      style:
+                          TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                  ElevatedButton.icon(
+                    onPressed: _studentsNotInClass.isEmpty
+                        ? null
+                        : _showAddStudentDialog,
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add Student'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              if (_studentsInClass.isEmpty)
+                const Text('No students in this class')
+              else
+                ..._studentsInClass.map((student) => ListTile(
+                      title: Text(student.name),
+                      trailing: IconButton(
+                        icon: const Icon(Icons.delete, color: Colors.red),
+                        onPressed: () => _removeStudent(student),
+                      ),
+                    )),
+            ],
+          ),
         ),
       ),
     );
