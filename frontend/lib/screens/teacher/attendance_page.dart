@@ -20,6 +20,9 @@ class _AttendancePageState extends State<AttendancePage> {
   bool _loading = true;
   List<ClassroomModel> _classes = [];
   ClassroomModel? _selectedClass;
+  Map<String, String> _attendance = {}; 
+
+  
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
@@ -98,7 +101,7 @@ class _AttendancePageState extends State<AttendancePage> {
 }
 
 
-Map<String, String> _attendance = {}; // studentId -> 'Present' or 'Absent'
+// studentId -> 'Present' or 'Absent'
 
 Widget _buildStudentList() {
   return Card(

@@ -20,8 +20,9 @@ class _AdminAttendanceState extends State<AdminAttendance> {
     
     _pages=[
       AttendanceView(),
-      ViewTeacherAttendance(),
-      TakeTeacherAttendance()
+      TakeTeacherAttendance(),
+      ViewTeacherAttendance()
+    
     ];
   }
 
