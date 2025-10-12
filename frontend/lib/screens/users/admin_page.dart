@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:frontend/controllers/auth_controller.dart';
 import 'package:frontend/provider/auth_provider.dart';
+import 'package:frontend/screens/admin/attendance_view.dart';
 import 'package:frontend/screens/admin/classroom_details.dart';
 import 'package:frontend/screens/admin/member_request.dart';
 import 'package:frontend/screens/admin/payment_records.dart';
@@ -32,7 +33,8 @@ class _AdminPageState extends State<AdminPage> {
       ClassListScreen(authToken: token),
       ClassroomDetails(),
       MemberRequest(),
-      CombinedFeesPaymentsPage()
+      CombinedFeesPaymentsPage(),
+      AttendanceView()
     ];
   }
   Future<void> _handleLogout() async {
@@ -95,7 +97,8 @@ class _AdminPageState extends State<AdminPage> {
             BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Chat'),
             BottomNavigationBarItem(icon: Icon(Icons.list_alt), label: 'Classes'),
             BottomNavigationBarItem(icon: Icon(Icons.person_add), label: 'Requests'),
-            BottomNavigationBarItem(icon: Icon(Icons.money), label: 'Fees')
+            BottomNavigationBarItem(icon: Icon(Icons.money), label: 'Fees'),
+            BottomNavigationBarItem(icon: Icon(Icons.list), label: 'Attendance'),
           ],
         ),
       ),

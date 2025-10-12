@@ -311,11 +311,15 @@ class _PaymentRecordsContentState extends State<PaymentRecordsContent> {
       }
     } catch (e) {
       debugPrint("Error fetching payment status: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error fetching payment data')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error fetching payment data')),
+        );
+      }
     } finally {
-      setState(() => loading = false);
+      if (mounted) {
+        setState(() => loading = false);
+      }
     }
   }
 

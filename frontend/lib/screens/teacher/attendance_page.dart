@@ -17,9 +17,7 @@ class _AttendancePageState extends State<AttendancePage> {
   late final String token;
   final TeacherController _controller = TeacherController();
   List<ClassroomModel> _studentsInClass = [];
-
   bool _loading = true;
-
   List<ClassroomModel> _classes = [];
   ClassroomModel? _selectedClass;
   @override
@@ -79,8 +77,6 @@ class _AttendancePageState extends State<AttendancePage> {
       'status': status.toLowerCase(),
     };
   }).toList();
-
-  print(attendanceList);
 
   setState(() => _loading = true);
   try {
@@ -155,8 +151,8 @@ Widget _buildStudentList() {
                               },
                               child: Row(
                                 children: [
-                                  Radio<String>(value: 'Present'),
-                                  Radio<String>(value: 'Absent'),
+                                  Radio<String>(value: 'Present', activeColor: Colors.green,),
+                                  Radio<String>(value: 'Absent', activeColor: Colors.red,),
                                 ],
                               ),
                             )
