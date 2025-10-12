@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:frontend/controllers/auth_controller.dart';
 import 'package:frontend/provider/auth_provider.dart';
-import 'package:frontend/screens/admin/attendance_view.dart';
 import 'package:frontend/screens/admin/classroom_details.dart';
 import 'package:frontend/screens/admin/member_request.dart';
 import 'package:frontend/screens/admin/payment_records.dart';
 import 'package:frontend/screens/auth/onboarding_page.dart';
 import 'package:frontend/screens/chat/classlist.dart';
+import 'package:frontend/screens/widgets/drawer.dart';
 import 'package:provider/provider.dart';
 
 
@@ -19,7 +19,7 @@ class AdminPage extends StatefulWidget {
 }
 
 class _AdminPageState extends State<AdminPage> {
-
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   late final token = Provider.of<AuthProvider>(context, listen: false).token!;
   int selectedIndex=0;
   late List<Widget> _pages;
@@ -34,7 +34,6 @@ class _AdminPageState extends State<AdminPage> {
       ClassroomDetails(),
       MemberRequest(),
       CombinedFeesPaymentsPage(),
-      AttendanceView()
     ];
   }
   Future<void> _handleLogout() async {
@@ -73,17 +72,25 @@ class _AdminPageState extends State<AdminPage> {
       canPop: false,
       onPopInvokedWithResult: _handleBackPressed,
       child: Scaffold(
+        key: _scaffoldKey,
         appBar: AppBar(
           backgroundColor: const Color.fromARGB(255, 52, 161, 88),
           title: Text('Admin Dashboard'),
           centerTitle: true,
           automaticallyImplyLeading: false,
+          leading: IconButton(
+            icon: const Icon(Icons.menu),
+            onPressed: () {
+              _scaffoldKey.currentState?.openDrawer();
+            },
+          ),
           actions: [
             IconButton(
                 onPressed: _handleLogout,
                 icon: Icon(Icons.logout))
           ],
         ),
+        drawer: const MyDrawer(),
         body:_pages[selectedIndex],
         bottomNavigationBar: BottomNavigationBar(
           type: BottomNavigationBarType.fixed,
@@ -98,7 +105,6 @@ class _AdminPageState extends State<AdminPage> {
             BottomNavigationBarItem(icon: Icon(Icons.list_alt), label: 'Classes'),
             BottomNavigationBarItem(icon: Icon(Icons.person_add), label: 'Requests'),
             BottomNavigationBarItem(icon: Icon(Icons.money), label: 'Fees'),
-            BottomNavigationBarItem(icon: Icon(Icons.list), label: 'Attendance'),
           ],
         ),
       ),

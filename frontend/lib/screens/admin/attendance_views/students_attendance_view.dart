@@ -217,11 +217,6 @@ class _AttendanceViewState extends State<AttendanceView> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('View Attendance'),
-        centerTitle: true,
-        automaticallyImplyLeading: false,
-      ),
       body: Padding(
         padding: const EdgeInsets.all(8),
         child: Column(
@@ -280,7 +275,6 @@ class _AttendanceViewState extends State<AttendanceView> {
             GestureDetector(
               onTap: () async {
                 _pickDate();
-                _getAttendanceData();
               },
               child: Container(
                 padding:
