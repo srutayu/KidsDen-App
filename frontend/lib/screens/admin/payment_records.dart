@@ -19,11 +19,6 @@ class CombinedFeesPaymentsPage extends StatelessWidget {
     final token = Provider.of<AuthProvider>(context, listen: false).token;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Fees & Payment Records"),
-        centerTitle: true,
-        automaticallyImplyLeading: false,
-      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
