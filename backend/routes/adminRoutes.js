@@ -6,7 +6,7 @@ const { getPendingApprovals, approveUser, approveAllUsers, rejectAllUsers, delet
 const { getFees, getStatusOfPayments } = require('../controllers/feesController');
 const { getYears, getMonthsByYear, getClass, updatePaymentRecordForOfflinePayment } = require('../controllers/paymentController');
 const { getUserNameById } = require('../controllers/authController');
-const { getAttendanceForTeacher } = require('../controllers/attendanceController');
+const { getAttendanceForTeacher, takeTeacherAttendance } = require('../controllers/attendanceController');
 
 const router = express.Router();
 
@@ -32,6 +32,7 @@ router.post('/offline-payment', updatePaymentRecordForOfflinePayment);
 
 
 //Attendance routes
+router.post('/take-teacher-attendance', takeTeacherAttendance);
 router.get('/get-teacher-attendance', getAttendanceForTeacher);
 
 
