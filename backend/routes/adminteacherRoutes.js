@@ -1,7 +1,7 @@
 const express = require('express');
 const { protect } = require('../middleware/authMiddleware');
 const { getStudentsNotInAnyClass } = require('../controllers/classController');
-const { takeAttendance, getAttendance, checkAttendance } = require('../controllers/attendanceController');
+const { takeAttendance, getAttendance, checkAttendance, getAttendanceForTeacher } = require('../controllers/attendanceController');
 const authorizeRole = require('../middleware/roleMiddleware').authorize;
 
 
@@ -16,7 +16,5 @@ router.get('/get-student-not-in-any-class', getStudentsNotInAnyClass);
 router.post('/take-attendance', takeAttendance);
 router.get('/get-attendance', getAttendance);
 router.get('/check-attendance', checkAttendance);
-
-
 module.exports = router;
 
