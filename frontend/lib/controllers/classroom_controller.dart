@@ -167,6 +167,33 @@ class ClassroomController {
     }
   }
 
+  
+  Future<List<ClassroomModel>> getAllTeachers(String token) async {
+  final url = Uri.parse('$_baseURL/class/get-teachers');
+  
+  final response = await http.get(
+    url,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $token',
+    },
+  );
+
+  if (response.statusCode == 200) {
+    final data = json.decode(response.body);
+    final List teachersJson = data['teachers'] ?? [];
+
+    List<ClassroomModel> teachers = teachersJson
+        .map<ClassroomModel>((json) => ClassroomModel.fromJson(json))
+        .toList();
+
+    return teachers;
+  } else {
+    throw Exception('Failed to load teachers');
+  }
+}
+
+
   Future<List<ClassroomModel>> getTeachersNotInClass(classId, token) async {
     final url = Uri.parse('$_baseURL/class/get-teacher-not-in-class?classId=$classId');
     final response = await http.get(url, headers: {
@@ -205,4 +232,29 @@ class ClassroomController {
     }
   }
 
+  Future<void> submitAttendance({
+    required String token,
+    required String date,
+    required List<Map<String, String>> attendance,
+  }) async {
+    final url = Uri.parse('$_baseURL/admin/take-teacher-attendance');
+
+    final body = {
+      'date': date,
+      'attendance': attendance,
+    };
+
+    final response = await http.post(
+      url,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token',
+      },
+      body: jsonEncode(body),
+    );
+
+    if (response.statusCode != 200 && response.statusCode != 201) {
+      throw Exception('Failed to submit attendance: ${response.body}');
+    }
+  }
 }

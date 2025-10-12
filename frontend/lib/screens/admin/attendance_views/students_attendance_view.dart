@@ -216,6 +216,9 @@ class _AttendanceViewState extends State<AttendanceView> {
 
   @override
   Widget build(BuildContext context) {
+    if (_loading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
     return Scaffold(
       body: Padding(
         padding: const EdgeInsets.all(8),

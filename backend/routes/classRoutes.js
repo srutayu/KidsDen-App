@@ -1,6 +1,6 @@
 const express = require('express');
 const { protect } = require('../middleware/authMiddleware');
-const { createClass, addTeachersToClass, addStudentsToClass, deleteClass, deleteTeacherFromClass, deleteStudentFromClass, getClassesName, getTeachers, getTeachersInClass, getStudentsInClass, getTeachersNotInAClass, getStudentsNotInAClass } = require('../controllers/classController');
+const { createClass, addTeachersToClass, addStudentsToClass, deleteClass, deleteTeacherFromClass, deleteStudentFromClass, getClassesName, getTeachersInClass, getStudentsInClass, getTeachersNotInAClass, getStudentsNotInAClass, getTeachers } = require('../controllers/classController');
 const authorizeRole = require('../middleware/roleMiddleware').authorize;
 
 

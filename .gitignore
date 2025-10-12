@@ -6,4 +6,5 @@ README.md
 
 /chatbackend/.env
 /backend/.env
-frontend/lib/constants/url.dart
+
+logs
