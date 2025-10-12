@@ -186,6 +186,9 @@ class _PaymentRecordsContentState extends State<PaymentRecordsContent> {
   void fetchClasses() async {
     List<String> fetchedClasses =
         await ClassController.getClasses(widget.token);
+    
+    if (!mounted) return;
+    
     setState(() {
       classes = fetchedClasses;
       if (classes.isNotEmpty) {
@@ -238,69 +241,75 @@ class _PaymentRecordsContentState extends State<PaymentRecordsContent> {
     return result;
   }
 
-  Future<void> fetchPaymentStatus() async {
-    if (selectedClass == null) return;
+ Future<void> fetchPaymentStatus() async {
+  if (selectedClass == null) return;
 
-    setState(() => loading = true);
+  if (!mounted) return;
+  setState(() => loading = true);
 
-    final year = selectedDate.year.toString();
-    final monthNumber = selectedDate.month;
-    final monthName = PaymentModel.getMonthName(monthNumber);
+  final year = selectedDate.year.toString();
+  final monthNumber = selectedDate.month;
+  final monthName = PaymentModel.getMonthName(monthNumber);
 
-    final url = Uri.parse(
-        '$_baseURL/admin/get-status?classId=$selectedClass&year=$year&month=$monthName');
+  final url = Uri.parse(
+    '$_baseURL/admin/get-status?classId=$selectedClass&year=$year&month=$monthName',
+  );
 
-    try {
-      final response = await http.get(url, headers: {
+  try {
+    final response = await http.get(
+      url,
+      headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ${widget.token}',
-      });
+      },
+    );
 
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
 
-        final knownStatuses = {'paid', 'pending', 'unpaid'};
-        Map<String, int> counts = {'paid': 0, 'pending': 0, 'unpaid': 0};
+      final knownStatuses = {'paid', 'pending', 'unpaid'};
+      Map<String, int> counts = {'paid': 0, 'pending': 0, 'unpaid': 0};
 
-        for (final item in data['summary'] ?? []) {
-          String status = (item['status'] as String?) ?? 'unknown';
-          int count = (item['count'] as int?) ?? 0;
-          if (knownStatuses.contains(status)) {
-            counts[status] = count;
-          }
+      for (final item in data['summary'] ?? []) {
+        String status = (item['status'] as String?) ?? 'unknown';
+        int count = (item['count'] as int?) ?? 0;
+        if (knownStatuses.contains(status)) {
+          counts[status] = count;
         }
+      }
 
-        Map<String, List<String>> studentsRaw = {
-          'paid': data['studentsByStatus']?['paid'] != null
-              ? (data['studentsByStatus']['paid'] as List)
-                  .whereType<String>()
-                  .toList()
-              : [],
-          'pending': data['studentsByStatus']?['pending'] != null
-              ? (data['studentsByStatus']['pending'] as List)
-                  .whereType<String>()
-                  .toList()
-              : [],
-          'unpaid': data['studentsByStatus']?['unpaid'] != null
-              ? (data['studentsByStatus']['unpaid'] as List)
-                  .whereType<String>()
-                  .toList()
-              : [],
-        };
+      Map<String, List<String>> studentsRaw = {
+        'paid': data['studentsByStatus']?['paid'] != null
+            ? (data['studentsByStatus']['paid'] as List)
+                .whereType<String>()
+                .toList()
+            : [],
+        'pending': data['studentsByStatus']?['pending'] != null
+            ? (data['studentsByStatus']['pending'] as List)
+                .whereType<String>()
+                .toList()
+            : [],
+        'unpaid': data['studentsByStatus']?['unpaid'] != null
+            ? (data['studentsByStatus']['unpaid'] as List)
+                .whereType<String>()
+                .toList()
+            : [],
+      };
 
-        // listOfUnpaidStudents = studentsRaw['unpaid'] ?? [];
+      final namedStudents = await fetchStudentsWithNames(studentsRaw);
 
-        final namedStudents = await fetchStudentsWithNames(studentsRaw);
-        // print(namedStudents);
+      if (!mounted) return;
+      setState(() {
+        statusCounts['paid'] = counts['paid'] ?? 0;
+        statusCounts['pending'] = counts['pending'] ?? 0;
+        statusCounts['unpaid'] = namedStudents['unpaid']?.length ?? 0;
 
-        setState(() {
-          statusCounts['paid'] = counts['paid'] ?? 0;
-          statusCounts['pending'] = counts['pending'] ?? 0;
-          statusCounts['unpaid'] = namedStudents['unpaid']?.length ?? 0;
-
-          studentsByStatus['paid'] = namedStudents['paid']?.values.toList() ?? [];
-          studentsByStatus['pending'] = namedStudents['pending']?.values.toList() ?? [];
-          studentsByStatus['unpaid'] = namedStudents['unpaid']?.values.toList() ?? [];
+        studentsByStatus['paid'] =
+            namedStudents['paid']?.values.toList() ?? [];
+        studentsByStatus['pending'] =
+            namedStudents['pending']?.values.toList() ?? [];
+        studentsByStatus['unpaid'] =
+            namedStudents['unpaid']?.values.toList() ?? [];
 
           listOfUnpaidStudent = namedStudents['unpaid']!;
           listOfPendingStudent = namedStudents['pending']!;
@@ -319,28 +328,34 @@ class _PaymentRecordsContentState extends State<PaymentRecordsContent> {
     }
   }
 
-  Future<void> pickMonth() async {
-    final picked = await showMonthYearPicker(
-      context: context,
-      initialDate: selectedDate,
-      firstDate: DateTime(2020),
-      lastDate: DateTime(DateTime.now().year, DateTime.now().month),
-      builder: (context, child) {
-        return MediaQuery(
-          data: MediaQuery.of(context)
-              .copyWith(textScaler: TextScaler.linear(0.9)),
-          child: child!,
-        );
-      },
-    );
+ Future<void> pickMonth() async {
+  final picked = await showMonthYearPicker(
+    context: context,
+    initialDate: selectedDate,
+    firstDate: DateTime(2020),
+    lastDate: DateTime(DateTime.now().year, DateTime.now().month),
+    builder: (context, child) {
+      return MediaQuery(
+        data: MediaQuery.of(context).copyWith(
+          textScaler: TextScaler.linear(0.9),
+        ),
+        child: child!,
+      );
+    },
+  );
 
-    if (picked != null) {
-      setState(() {
-        selectedDate = DateTime(picked.year, picked.month);
-      });
-      await fetchPaymentStatus();
-    }
+  if (!mounted) return; // ensure widget is still active
+
+  if (picked != null) {
+    setState(() {
+      selectedDate = DateTime(picked.year, picked.month);
+    });
+
+    if (!mounted) return; // check again before async call
+    await fetchPaymentStatus();
   }
+}
+
 
   @override
   Widget build(BuildContext context) {

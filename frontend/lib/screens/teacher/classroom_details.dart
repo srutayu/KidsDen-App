@@ -31,22 +31,31 @@ class _ClassroomDetailsTeacherState extends State<ClassroomDetailsTeacher> {
     _initializeData();
   }
 
-  Future<void> _initializeData() async {
-    try {
-      final classes = await _controller.getAllClasses(token);
-      if (classes.isNotEmpty) {
-        _selectedClass = classes[0];
-        await _loadClassMembers(_selectedClass!.id);
-      }
-      setState(() {
-        _classes = classes;
-        _loading = false;
-      });
-    } catch (e) {
+Future<void> _initializeData() async {
+  try {
+    final classes = await _controller.getAllClasses(token);
+
+    if (!mounted) return; 
+
+    if (classes.isNotEmpty) {
+      _selectedClass = classes[0];
+      await _loadClassMembers(_selectedClass!.id);
+
+      if (!mounted) return; 
+    }
+
+    setState(() {
+      _classes = classes;
+      _loading = false;
+    });
+  } catch (e) {
+    if (mounted) {
       setState(() => _loading = false);
       _showError('Failed to load classes: $e');
     }
   }
+}
+
 
   Future<void> _loadClassMembers(String classId) async {
     setState(() => _loading = true);

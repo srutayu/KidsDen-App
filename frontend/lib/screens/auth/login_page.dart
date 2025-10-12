@@ -121,6 +121,8 @@ class _LoginPageState extends State<LoginPage> {
                           Provider.of<AuthProvider>(context, listen: false)
                               .setToken(token!);
                           await storage.write(key: 'token', value:  token);
+                          print('token is');
+                          print( await storage.read(key: 'token'));
                           Provider.of<UserProvider>(context, listen: false)
                               .fetchUserDetails(_email.text, token);
                           await storage.write(key: 'email', value: _email.text);

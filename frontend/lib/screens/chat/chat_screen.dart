@@ -225,6 +225,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final currentUserId =
         Provider.of<UserProvider>(context, listen: false).user?.id;
     final senderId = msg['sender'] ?? '';
+    print(msg);
 
   if (senderId.isNotEmpty) {
     loadUserNameIfNeeded(senderId);
@@ -256,7 +257,7 @@ class _ChatScreenState extends State<ChatScreen> {
           children: [
             // Message text
             Text(
-              msg['content'] ?? '',
+              msg['content'] ?? " ",
               style: const TextStyle(fontSize: 16),
             ),
             const SizedBox(height: 4),
@@ -273,15 +274,15 @@ class _ChatScreenState extends State<ChatScreen> {
                     color: Colors.black54,
                   ),
                 ),
-                SizedBox(width: 10),
-                Text(
+                      SizedBox(width: 10),
+                      Text(
                  msg['timestamp'] != null 
                  ? DateFormat('h:mma').format(DateTime.parse(msg['timestamp']).toLocal()).toLowerCase() : '',
                   style: const TextStyle(
                     fontSize: 10,
                     color: Colors.black38,
                   ),
-                ),
+                )
               ],
             ),
           ],
