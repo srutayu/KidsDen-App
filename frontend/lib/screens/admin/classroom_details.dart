@@ -380,7 +380,7 @@ class _ClassroomDetailsState extends State<ClassroomDetails> {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
-                  color: Color(0xFFF4FBF9),
+                  color: Color.fromARGB(255, 236, 242, 240),
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(

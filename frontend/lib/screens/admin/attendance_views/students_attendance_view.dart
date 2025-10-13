@@ -1,7 +1,9 @@
 import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:flutter/material.dart';
 import 'package:frontend/controllers/attendance_controller.dart';
+import 'package:frontend/controllers/auth_controller.dart';
 import 'package:frontend/controllers/classroom_controller.dart';
+import 'package:frontend/controllers/teacher_controller.dart';
 import 'package:frontend/models/classroom_model.dart';
 import 'package:frontend/provider/auth_provider.dart';
 import 'package:intl/intl.dart';
@@ -18,7 +20,8 @@ class _AttendanceViewState extends State<AttendanceView> {
   late final String token;
   ClassroomModel? _selectedClass;
   DateTime selectedDate= DateTime.now();
-  final ClassroomController _controller = ClassroomController();
+  final ClassroomController _controllerAdmin = ClassroomController();
+  final TeacherController _controllerTeacher = TeacherController();
   List<ClassroomModel> _classes = [];
   bool _loading = true;
   List<Map<String, dynamic>> _attendanceList = [];
@@ -33,15 +36,29 @@ class _AttendanceViewState extends State<AttendanceView> {
 
   
   Future<void> _initializeData() async {
-    try {
-      final classes = await _controller.getAllClasses(token);
-      setState(() {
-        _classes = classes;
-        _loading = false;
-      });
-    } catch (e) {
-      setState(() => _loading = false);
-      _showError('Failed to load classes: $e');
+    final role = await AuthController.getRole(token);
+    if (role == 'admin') {
+      try {
+        final classes = await _controllerAdmin.getAllClasses(token);
+        setState(() {
+          _classes = classes;
+          _loading = false;
+        });
+      } catch (e) {
+        setState(() => _loading = false);
+        _showError('Failed to load classes: $e');
+      }
+    } else if (role == 'teacher') {
+      try {
+        final classes = await _controllerTeacher.getAllClasses(token);
+        setState(() {
+          _classes = classes;
+          _loading = false;
+        });
+      } catch (e) {
+        setState(() => _loading = false);
+        _showError('Failed to load classes: $e');
+      }
     }
   }
 

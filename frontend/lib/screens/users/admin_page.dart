@@ -84,11 +84,6 @@ class _AdminPageState extends State<AdminPage> {
               _scaffoldKey.currentState?.openDrawer();
             },
           ),
-          actions: [
-            IconButton(
-                onPressed: _handleLogout,
-                icon: Icon(Icons.logout))
-          ],
         ),
         drawer: const MyDrawer(),
         body:_pages[selectedIndex],
