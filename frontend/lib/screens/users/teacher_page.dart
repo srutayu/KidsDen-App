@@ -8,6 +8,7 @@ import 'package:frontend/screens/auth/onboarding_page.dart';
 import 'package:frontend/screens/chat/classlist.dart';
 import 'package:frontend/screens/teacher/attendance_page.dart';
 import 'package:frontend/screens/teacher/classroom_details.dart';
+import 'package:frontend/screens/widgets/exitDialog.dart';
 import 'package:provider/provider.dart';
 
 class TeacherPage extends StatefulWidget {
@@ -66,7 +67,7 @@ class _TeacherPageState extends State<TeacherPage> {
       });
     }
     else if (selectedIndex==0){
-      _handleLogout();
+      showLogoutConfirmation(context);
     }
   }
 

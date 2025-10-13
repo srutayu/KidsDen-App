@@ -37,11 +37,6 @@ class _ViewTeacherAttendanceState extends State<ViewTeacherAttendance> {
     });
   }
 
-   
-  void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-  }
-
   
   void _pickDate() async {
     DateTime? picked = await showDatePicker(
