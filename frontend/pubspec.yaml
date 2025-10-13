@@ -73,6 +73,7 @@ flutter:
    - assets/logo.png
    - assets/logo_white.png
    - assets/lotties/
+   - assets/images/
   fonts:
    - family: SFPro
      fonts:

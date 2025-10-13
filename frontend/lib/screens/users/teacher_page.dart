@@ -3,6 +3,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:frontend/controllers/auth_controller.dart';
 import 'package:frontend/provider/auth_provider.dart';
 import 'package:frontend/provider/user_data_provider.dart';
+import 'package:frontend/screens/admin/attendance_views/students_attendance_view.dart';
 import 'package:frontend/screens/auth/onboarding_page.dart';
 import 'package:frontend/screens/chat/classlist.dart';
 import 'package:frontend/screens/teacher/attendance_page.dart';
@@ -30,6 +31,7 @@ class _TeacherPageState extends State<TeacherPage> {
       ClassListScreen(authToken: token),
       ClassroomDetailsTeacher(),
       AttendancePage(),
+      AttendanceView(),
     ];
   }
 
@@ -58,7 +60,7 @@ class _TeacherPageState extends State<TeacherPage> {
     }
   }
   Future<void> _handleBackPressed(bool didPop, Object? result) async {
-    if (selectedIndex == 1 || selectedIndex == 2 ) {
+    if (selectedIndex != 0) {
       setState(() {
         selectedIndex = 0;
       });
@@ -92,6 +94,7 @@ class _TeacherPageState extends State<TeacherPage> {
             BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Class Chats'),
             BottomNavigationBarItem(icon: Icon(Icons.school), label: 'Students'),
             BottomNavigationBarItem(icon: Icon(Icons.list), label: 'Attendance'),
+            BottomNavigationBarItem(icon: Icon(Icons.history), label: 'View Attendance')
           ],
         ),
       ),

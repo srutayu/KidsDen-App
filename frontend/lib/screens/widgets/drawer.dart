@@ -1,8 +1,40 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:frontend/controllers/auth_controller.dart';
+import 'package:frontend/provider/auth_provider.dart';
 import 'package:frontend/screens/admin/attendance_views/admin_attendance.dart';
+import 'package:frontend/screens/auth/onboarding_page.dart';
+import 'package:provider/provider.dart';
 
-class MyDrawer extends StatelessWidget {
+class MyDrawer extends StatefulWidget {
   const MyDrawer({super.key});
+
+  @override
+  State<MyDrawer> createState() => _MyDrawerState();
+}
+
+class _MyDrawerState extends State<MyDrawer> {
+  final storage= FlutterSecureStorage();
+  late final token = Provider.of<AuthProvider>(context, listen: false).token!;
+
+  Future<void> _handleLogout() async {
+    try {
+      await storage.deleteAll();
+      final value = await AuthController.logout(token);
+      if (value) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(
+            builder: (context) => const OnboardingPage(),
+          ),
+        );
+      } else {
+        print("Logout Failed");
+      }
+    } catch (error) {
+      print("Logout Error: $error");
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -10,17 +42,14 @@ class MyDrawer extends StatelessWidget {
       child: ListView(
         padding: EdgeInsets.zero, // removes default top padding
         children: [
-          const DrawerHeader(
-            decoration: BoxDecoration(
-              color: Colors.blue,
-            ),
-            child: Text(
-              'Hello, User!',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 24,
+          DrawerHeader(
+            decoration: const BoxDecoration(
+              image: DecorationImage(
+                image: AssetImage('assets/images/drawerImage.png'),
+                fit: BoxFit.cover, // makes it fill the entire header
               ),
             ),
+            child: Container(), // empty child (optional)
           ),
           ListTile(
             leading: const Icon(Icons.home),
@@ -45,8 +74,7 @@ class MyDrawer extends StatelessWidget {
             leading: const Icon(Icons.logout),
             title: const Text('Logout'),
             onTap: () {
-              Navigator.pop(context);
-              // Add logout logic here
+              _handleLogout();
             },
           ),
         ],
