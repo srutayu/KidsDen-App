@@ -49,7 +49,7 @@ function startFeeScheduler() {
                 }
             }
             console.log('Fees reset to base amount.');
-        } else if (day >= 10) {
+        } else if (day > 10) {
             console.log('[FeeScheduler] Running immediate penalty (after 10th of month)');
             await cacheBaseFees();
             const feesList = await Fees.find({});
@@ -78,9 +78,9 @@ function startFeeScheduler() {
         // Cache base fees on app start
         cacheBaseFees();
 
-        // Add penalty on 10th of every month (midnight)
-        cron.schedule('* * 10 * *', async () => {
-            console.log('Running penalty fee update (10th of month)');
+        // Add penalty on 11th of every month (midnight)
+        cron.schedule('* * 11 * *', async () => {
+            console.log('Running penalty fee update (11th of month)');
             const feesList = await Fees.find({});
             for (const fee of feesList) {
                 if (typeof fee.baseAmount === 'number' && typeof fee.amount === 'number') {

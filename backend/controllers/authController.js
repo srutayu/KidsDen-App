@@ -36,10 +36,9 @@ exports.registerUser = async (req, res) => {
             return res.status(400).json({ message: 'User already exists' });
         }
         
-        const user = new User({ name, email, password, role });
-        await user.save();
-        await accountCreatedConfirmationEmail(email, name);
-        //TODO: Nofity Admin of new user registration (Optional)
+    const user = new User({ name, email, password, role });
+    await user.save();
+    accountCreatedConfirmationEmail(email, name).catch(err => console.error('Account creation email error:', err));
 
         res.status(201).json({
             _id: user._id,

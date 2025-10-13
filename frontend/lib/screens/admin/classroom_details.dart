@@ -1,3 +1,4 @@
+import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:flutter/material.dart';
 import 'package:frontend/controllers/classroom_controller.dart';
 import 'package:frontend/models/classroom_model.dart';
@@ -380,27 +381,53 @@ Future<void> _loadClassMembers(String classId) async {
         padding: const EdgeInsets.all(16.0),
         child: Column(
           children: [
-            DropdownButton<ClassroomModel>(
-              isExpanded: true,
-              value: _selectedClass,
-              hint: const Text('Select Class'),
-              items: _classes
-                  .map(
-                    (c) => DropdownMenuItem<ClassroomModel>(
-                  value: c,
-                  child: Text(c.name),
+            Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: Color.fromARGB(255, 236, 242, 240),
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: const Color.fromARGB(255, 219, 218, 218),
+                      spreadRadius: 1,
+                      blurRadius: 1,
+                      offset: const Offset(1, 2),
+                    ),
+                  ],
                 ),
-              )
-                  .toList(),
-              onChanged: (cls) {
-                if (cls != null) {
-                  setState(() {
-                    _selectedClass = cls;
-                  });
-                  _loadClassMembers(cls.id);
-                }
-              },
-            ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton2<ClassroomModel>(
+                    isExpanded: true,
+                    value: _selectedClass,
+                    hint: const Text(
+                      'Select Class',
+                      style: TextStyle(fontSize: 16, color: Colors.grey),
+                    ),
+                    items: _classes.map((cls) {
+                      return DropdownMenuItem(
+                        value: cls,
+                        child: Text(
+                          cls.name,
+                          style: const TextStyle(fontWeight: FontWeight.w500),
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (cls) {
+                      if (cls != null) {
+                        setState(() {
+                          _selectedClass = cls;
+                        });
+                        _loadClassMembers(cls.id);
+                      }
+                    },
+                    dropdownStyleData: DropdownStyleData(
+                        decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            color: Colors.white)),
+                  ),
+                ),
+              ),
             const SizedBox(height: 20),
             Expanded(
               child: ListView(

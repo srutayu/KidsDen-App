@@ -52,6 +52,7 @@ dependencies:
   flutter_localizations:
     sdk: flutter
   shimmer: ^3.0.0
+  dropdown_button2: ^2.3.9
 
 
 
@@ -72,6 +73,7 @@ flutter:
    - assets/logo.png
    - assets/logo_white.png
    - assets/lotties/
+   - assets/images/
   fonts:
    - family: SFPro
      fonts:

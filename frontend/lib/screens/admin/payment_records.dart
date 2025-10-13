@@ -19,11 +19,6 @@ class CombinedFeesPaymentsPage extends StatelessWidget {
     final token = Provider.of<AuthProvider>(context, listen: false).token;
 
     return Scaffold(
-      appBar: AppBar(
-        title: const Text("Fees & Payment Records"),
-        centerTitle: true,
-        automaticallyImplyLeading: false,
-      ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -320,11 +315,15 @@ class _PaymentRecordsContentState extends State<PaymentRecordsContent> {
       }
     } catch (e) {
       debugPrint("Error fetching payment status: $e");
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Error fetching payment data')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Error fetching payment data')),
+        );
+      }
     } finally {
-      setState(() => loading = false);
+      if (mounted) {
+        setState(() => loading = false);
+      }
     }
   }
 

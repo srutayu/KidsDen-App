@@ -87,7 +87,7 @@ class AuthController {
     }
   }
 
-  static Future<int> getLoginDate(String token) async {
+  static Future<String> getRole(String token) async {
     final url = Uri.parse('$_baseURL/get-role');
 
     final response = await http.get(
@@ -100,8 +100,8 @@ class AuthController {
 
     if (response.statusCode == 200) {
       final data = jsonDecode(response.body);
-      final loginDate = (data['logindate']);
-      return loginDate;
+      final role = (data['role']);
+      return role;
     }
     else {
       throw Exception("Failed to fetch login date");
