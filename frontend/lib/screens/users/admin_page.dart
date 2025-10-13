@@ -8,6 +8,7 @@ import 'package:frontend/screens/admin/payment_records.dart';
 import 'package:frontend/screens/auth/onboarding_page.dart';
 import 'package:frontend/screens/chat/classlist.dart';
 import 'package:frontend/screens/widgets/drawer.dart';
+import 'package:frontend/screens/widgets/exitDialog.dart';
 import 'package:provider/provider.dart';
 
 
@@ -62,7 +63,7 @@ class _AdminPageState extends State<AdminPage> {
       });
     }
     else if (selectedIndex==0){
-      _handleLogout();
+      showLogoutConfirmation(context);
     }
   }
 

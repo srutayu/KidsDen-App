@@ -40,8 +40,9 @@ class _SplashScreenState extends State<SplashScreen>
       _decideNextPage();
     });
 
-    // Run API/auth check in background
+     WidgetsBinding.instance.addPostFrameCallback((_) {
     _checkAuth();
+  });
   }
 
   Future<void> _checkAuth() async {

@@ -6,6 +6,7 @@ import 'package:frontend/provider/user_data_provider.dart';
 import 'package:frontend/screens/auth/onboarding_page.dart';
 import 'package:frontend/screens/chat/classlist.dart';
 import 'package:frontend/screens/student/payment_page.dart';
+import 'package:frontend/screens/widgets/exitDialog.dart';
 import 'package:provider/provider.dart';
 
 class StudentPage extends StatefulWidget {
@@ -56,7 +57,7 @@ class _StudentPageState extends State<StudentPage> {
       });
     }
     else if (selectedIndex==0){
-      _handleLogout();
+      showLogoutConfirmation(context);
     }
     // Otherwise, let the system handle the back (e.g., exit app)
   }
