@@ -925,7 +925,8 @@ class _ChatScreenState extends State<ChatScreen> {
   final initials = getInitials(senderName);
 
   final bool isMe = currentUserId != null && senderId == currentUserId;
-    return Align(
+    // Build the message bubble first, then wrap with GestureDetector for deletion
+    final bubble = Align(
       // alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Align(
   alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
@@ -960,50 +961,29 @@ class _ChatScreenState extends State<ChatScreen> {
                         if (parsed is Map && parsed['type'] == 'file') {
                           // Pass the whole parsed map so we can handle local preview (base64) and server URL
                           final idKey = msg['_id'] as String? ?? '';
-                          final senderIdLocal = msg['sender'] ?? '';
                           final bool isUploading = uploadingKeys.contains(idKey) || idKey.startsWith('local_');
-                          return GestureDetector(
-                            onLongPress: () async {
-                              // If this is an optimistic local message, allow local removal
-                              if (idKey.startsWith('local_')) {
-                                if (!mounted) return;
-                                setState(() { messages.removeWhere((m) => m['_id'] == idKey); uploadingKeys.remove(idKey); });
-                                return;
-                              }
-
-                              // Check permission: sender or admin/teacher can delete
-                              final currentUserIdLocal = Provider.of<UserProvider>(context, listen: false).user?.id;
-                              if (currentUserIdLocal == null) return;
-                              if (!(currentUserIdLocal == senderIdLocal || currentUserRole == 'admin' || currentUserRole == 'teacher')) {
-                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('You do not have permission to delete this message')));
-                                return;
-                              }
-
-                              final should = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
-                                title: Text('Delete message?'),
-                                content: Text('This will remove the message and any attached files.'),
-                                actions: [ TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text('Cancel')), TextButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text('Delete')) ],
-                              ));
-                              if (should != true) return;
-
-                              try {
-                                final res = await http.delete(Uri.parse('${URL.chatURL}/classes/delete-message/${idKey}'), headers: {'Authorization': 'Bearer ${widget.authToken}'});
-                                if (res.statusCode == 200) {
-                                  if (!mounted) return;
-                                  setState(() { messages.removeWhere((m) => m['_id'] == idKey); });
-                                } else {
-                                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to delete')));
-                                }
-                              } catch (e) {
-                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Delete failed: $e')));
-                              }
-                            },
-                            child: Stack(
-                              children: [
-                                _buildFilePreview(parsed, idKey),
-                                if (isUploading) Positioned.fill(child: Container(color: Colors.black26, child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [CircularProgressIndicator(), SizedBox(height:8), Text('Uploading...', style: TextStyle(color: Colors.white))])))),
-                              ],
-                            ),
+                          // Build file preview with uploading overlay; long-press deletion is handled
+                          // by the outer wrapper (below) which calls _attemptDeleteMessage.
+                          return Stack(
+                            children: [
+                              _buildFilePreview(parsed, idKey),
+                              if (isUploading)
+                                Positioned.fill(
+                                  child: Container(
+                                    color: Colors.black26,
+                                    child: Center(
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          CircularProgressIndicator(),
+                                          SizedBox(height: 8),
+                                          Text('Uploading...', style: TextStyle(color: Colors.white)),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
                           );
                         }
 
@@ -1046,6 +1026,66 @@ class _ChatScreenState extends State<ChatScreen> {
 ),
 
     );
+
+    // Wrap with long-press delete handler so all messages can be deleted uniformly
+    return GestureDetector(
+      onLongPress: () => _attemptDeleteMessage(msg['_id'] as String? ?? '', msg),
+      child: bubble,
+    );
+  }
+
+  /// Attempt to delete a message. If the message is optimistic (local_ id) it
+  /// will be removed locally. Otherwise permission checks are enforced and a
+  /// DELETE request is sent to the backend. On success the message is removed
+  /// from the local list; failures show a SnackBar.
+  Future<void> _attemptDeleteMessage(String idKey, Map msg) async {
+    if (idKey.startsWith('local_')) {
+      if (!mounted) return;
+      setState(() {
+        messages.removeWhere((m) => m['_id'] == idKey);
+        uploadingKeys.remove(idKey);
+      });
+      return;
+    }
+
+    final senderIdLocal = msg['sender'] ?? '';
+    final currentUserIdLocal = Provider.of<UserProvider>(context, listen: false).user?.id;
+    if (currentUserIdLocal == null) return;
+    if (!(currentUserIdLocal == senderIdLocal || currentUserRole == 'admin' || currentUserRole == 'teacher')) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('You do not have permission to delete this message')));
+      return;
+    }
+
+    final should = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Delete message?'),
+        content: Text('This will remove the message and any attached files.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text('Cancel')),
+          TextButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text('Delete')),
+        ],
+      ),
+    );
+
+    if (should != true) return;
+
+    try {
+      final res = await http.delete(Uri.parse('${URL.chatURL}/classes/delete-message/${idKey}'), headers: {'Authorization': 'Bearer ${widget.authToken}'});
+      if (res.statusCode == 200) {
+        if (!mounted) return;
+        setState(() {
+          messages.removeWhere((m) => m['_id'] == idKey);
+        });
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to delete')));
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Delete failed: $e')));
+    }
   }
 
   @override
