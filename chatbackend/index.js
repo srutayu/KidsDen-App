@@ -1,16 +1,17 @@
+
+require('dotenv').config();
+
 const express = require('express');
 const cors = require('cors');
-
 
 const errorHandler = require('./middleware/errorHandler');
 const connectDB = require('./config/db');
 const http = require('http');
 const { authenticate, canSendMessage } = require('./controllers/chatController');
 const { pub, sub } = require('./config/redisClient');
+const { getPresignedGetUrl } = require('./utils/s3');
 const {produceMessage, startConsumer} = require('./kafka/producer');
 const { start } = require('repl');
-
-require('dotenv').config();
 
 const app = express();
 const server = http.createServer(app);
@@ -45,18 +46,44 @@ sub.on('message', (channel, message) => {
   if (channel === 'chatMessages') {
     const data = JSON.parse(message);
     const room = `class_${data.classId}`;
-    
-    // Send message to ALL users in the room
-    io.to(room).emit('message', {
-      _id: data._id,
-      classId: data.classId,
-      content: data.message, // Send as 'content' to match frontend expectation
-      sender: data.sender,
-      senderRole: data.senderRole,
-      timestamp: data.timestamp
-    });
-    
-    console.log(`Message sent to room ${room}:`, data.message);
+    (async () => {
+      try {
+        let content = data.message;
+        // If content is string try to parse JSON
+        let parsed = null;
+        if (typeof content === 'string') {
+          try { parsed = JSON.parse(content); } catch (e) { parsed = null; }
+        } else if (typeof content === 'object') {
+          parsed = content;
+        }
+
+        // If this is a file message and we need to presign, generate server-side GET URL
+        if (process.env.S3_PRESIGN === 'true' && parsed && parsed.type === 'file' && parsed.key) {
+          try {
+            const presigned = await getPresignedGetUrl(parsed.key);
+            parsed.url = presigned;
+            content = parsed; // emit as object
+          } catch (e) {
+            console.error('Error generating presigned GET for redis relay:', e);
+            // keep original content
+          }
+        }
+
+        // Send message to ALL users in the room
+        io.to(room).emit('message', {
+          _id: data._id,
+          classId: data.classId,
+          content: content, // Send as 'content' to match frontend expectation
+          sender: data.sender,
+          senderRole: data.senderRole,
+          timestamp: data.timestamp
+        });
+
+        console.log(`Message sent to room ${room}:`, data.message);
+      } catch (err) {
+        console.error('Error while relaying redis message:', err);
+      }
+    })();
   }
 });
 

@@ -6,6 +6,11 @@ import 'package:provider/provider.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:file_selector/file_selector.dart';
+import 'package:url_launcher/url_launcher.dart';
+import 'dart:io';
+import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 class ChatScreen extends StatefulWidget {
   final String authToken;
@@ -20,6 +25,201 @@ class ChatScreen extends StatefulWidget {
 
   @override
   _ChatScreenState createState() => _ChatScreenState();
+}
+
+
+// Screen to show media thumbnails and open full-screen viewer
+class MediaGalleryScreen extends StatelessWidget {
+  final List<Map> mediaList;
+
+  MediaGalleryScreen({required this.mediaList});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Shared media')),
+      body: mediaList.isEmpty
+          ? Center(child: Text('No media shared yet'))
+          : GridView.builder(
+              padding: const EdgeInsets.all(8),
+              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                crossAxisSpacing: 4,
+                mainAxisSpacing: 4,
+              ),
+              itemCount: mediaList.length,
+              itemBuilder: (ctx, i) {
+                final item = mediaList[i];
+                final mime = item['mime'] as String? ?? '';
+                final url = item['url'] as String? ?? '';
+
+                return GestureDetector(
+                  onTap: () {
+                    Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => FullScreenMedia(initialIndex: i, mediaList: mediaList),
+                    ));
+                  },
+                  child: Container(
+                    color: Colors.black12,
+                    child: mime.startsWith('image/')
+                        ? Image.network(url, fit: BoxFit.cover)
+                        : Stack(
+                            children: [
+                              Positioned.fill(
+                                child: Container(color: Colors.black12),
+                              ),
+                              Center(
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(mime.startsWith('video/') ? Icons.videocam : Icons.insert_drive_file, size: 36),
+                                    SizedBox(height: 6),
+                                    Text(item['name'] ?? '', overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12)),
+                                  ],
+                                ),
+                              )
+                            ],
+                          ),
+                  ),
+                );
+              },
+            ),
+    );
+  }
+}
+
+
+class FullScreenMedia extends StatefulWidget {
+  final int initialIndex;
+  final List<Map> mediaList;
+
+  FullScreenMedia({required this.initialIndex, required this.mediaList});
+
+  @override
+  _FullScreenMediaState createState() => _FullScreenMediaState();
+}
+
+class _FullScreenMediaState extends State<FullScreenMedia> {
+  late PageController _pageController;
+  late int _currentIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex;
+    _pageController = PageController(initialPage: _currentIndex);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.mediaList[_currentIndex]['name'] ?? ''),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.download),
+            tooltip: 'Download',
+            onPressed: () async {
+              await _saveCurrentMedia();
+            },
+          )
+        ],
+      ),
+      body: PageView.builder(
+        controller: _pageController,
+        itemCount: widget.mediaList.length,
+        onPageChanged: (idx) => setState(() => _currentIndex = idx),
+        itemBuilder: (ctx, idx) {
+          final item = widget.mediaList[idx];
+          final mime = item['mime'] as String? ?? '';
+          final url = item['url'] as String? ?? '';
+
+          if (mime.startsWith('image/')) {
+            return InteractiveViewer(
+              child: Center(child: Image.network(url, fit: BoxFit.contain)),
+            );
+          }
+
+          // For videos and pdfs, we'll show a placeholder with open action
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(mime.startsWith('video/') ? Icons.videocam : Icons.insert_drive_file, size: 80),
+                SizedBox(height: 12),
+                Text(item['name'] ?? ''),
+                SizedBox(height: 12),
+                ElevatedButton.icon(
+                  icon: Icon(Icons.open_in_new),
+                  label: Text('Open'),
+                  onPressed: () async {
+                    final uri = Uri.parse(url);
+                    if (await canLaunchUrl(uri)) {
+                      await launchUrl(uri, mode: LaunchMode.externalApplication);
+                    }
+                  },
+                )
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  Future<void> _saveCurrentMedia() async {
+    final item = widget.mediaList[_currentIndex];
+    final url = item['url'] as String? ?? '';
+    final name = item['name'] as String? ?? 'downloaded_file';
+
+    if (url.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No URL to download')));
+      return;
+    }
+
+    try {
+      // Request storage permission on Android if needed
+      if (Platform.isAndroid) {
+        final status = await Permission.storage.status;
+        if (!status.isGranted) {
+          final res = await Permission.storage.request();
+          if (!res.isGranted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Storage permission denied')));
+            return;
+          }
+        }
+      }
+
+      final resp = await http.get(Uri.parse(url));
+      if (resp.statusCode != 200) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to download: ${resp.statusCode}')));
+        return;
+      }
+
+      final bytes = resp.bodyBytes;
+
+      Directory baseDir;
+      if (Platform.isAndroid) {
+        // App-specific external directory is best for compatibility
+        baseDir = (await getExternalStorageDirectory())!;
+      } else {
+        baseDir = await getApplicationDocumentsDirectory();
+      }
+
+      final saveDir = Directory('${baseDir.path}/KidsDen');
+      if (!await saveDir.exists()) await saveDir.create(recursive: true);
+
+      // sanitize name
+      final safeName = name.replaceAll(RegExp(r"[^0-9A-Za-z. _-]"), '_');
+      final file = File('${saveDir.path}/$safeName');
+      await file.writeAsBytes(bytes);
+
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Saved to ${file.path}')));
+    } catch (e) {
+      print('Error saving file: $e');
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error saving file')));
+    }
+  }
 }
 
 class _ChatScreenState extends State<ChatScreen> {
@@ -43,6 +243,36 @@ class _ChatScreenState extends State<ChatScreen> {
     initSocket();
   }
 
+  List<Map> _getMediaMessages() {
+    final List<Map> media = [];
+    for (final msg in messages) {
+      final content = msg['content'];
+      dynamic parsed = content;
+      if (content is String) {
+        try {
+          parsed = json.decode(content);
+        } catch (_) {
+          parsed = content;
+        }
+      }
+
+      if (parsed is Map && parsed['type'] == 'file') {
+        final mime = parsed['mime'] ?? '';
+        if (mime.startsWith('image/') || mime.startsWith('video/') || mime == 'application/pdf') {
+          media.add({
+            'url': parsed['url'],
+            'name': parsed['name'] ?? '',
+            'mime': mime,
+            'timestamp': msg['timestamp'],
+            'sender': msg['sender'],
+            '_id': msg['_id'],
+          });
+        }
+      }
+    }
+    return media.reversed.toList();
+  }
+
   Future<void> fetchCurrentUserDetails() async {
   if (currentUserId == null) return;
     try {
@@ -53,6 +283,11 @@ class _ChatScreenState extends State<ChatScreen> {
       );
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
+        if (!mounted) {
+          // Widget was disposed while awaiting network response; keep state updated but don't call setState
+          currentUserRole = data['role'];
+          return;
+        }
         setState(() {
           currentUserRole = data['role'];
         });
@@ -72,9 +307,16 @@ class _ChatScreenState extends State<ChatScreen> {
 
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
+        // If widget is already disposed, avoid calling setState
+        if (!mounted) {
+          messages = data;
+          print('Fetched ${messages.length} messages for class ${widget.classId} (widget disposed before update)');
+          return;
+        }
         setState(() {
           messages = data;
         });
+        print('Fetched ${messages.length} messages for class ${widget.classId}');
       }
     } catch (e) {
       print('Error fetching old messages: $e');
@@ -128,7 +370,29 @@ class _ChatScreenState extends State<ChatScreen> {
               'timestamp': data['timestamp'],
               'classId': data['classId'],
             };
-            messages.add(formattedMessage);
+            // If incoming message has a file key, try to replace local optimistic message
+            try {
+              dynamic parsedIncoming = formattedMessage['content'];
+              if (parsedIncoming is String) parsedIncoming = json.decode(parsedIncoming);
+              if (parsedIncoming is Map && parsedIncoming['type'] == 'file' && parsedIncoming['key'] != null) {
+                final key = parsedIncoming['key'];
+                final idx = messages.indexWhere((m) {
+                  try {
+                    final pc = m['content'] is String ? json.decode(m['content']) : m['content'];
+                    return pc is Map && pc['key'] == key && pc['localPreviewBase64'] != null;
+                  } catch (e) { return false; }
+                });
+                if (idx >= 0) {
+                  messages[idx] = formattedMessage;
+                } else {
+                  messages.add(formattedMessage);
+                }
+              } else {
+                messages.add(formattedMessage);
+              }
+            } catch (e) {
+              messages.add(formattedMessage);
+            }
             // Sort messages by timestamp to maintain order
             messages.sort((a, b) => DateTime.parse(a['timestamp']).compareTo(DateTime.parse(b['timestamp'])));
           }
@@ -155,7 +419,7 @@ class _ChatScreenState extends State<ChatScreen> {
     socket.connect();
     return;
   }
-  
+
   print('Sending message: $msg');
   socket.emit('message', {
     'classId': widget.classId,
@@ -166,6 +430,196 @@ class _ChatScreenState extends State<ChatScreen> {
   _controller.clear();
   sendTyping(false); // Stop typing indicator when message is sent
 }
+
+  Future<void> uploadFile() async {
+    if (currentUserId == null) return;
+    try {
+      final XTypeGroup typeGroup = XTypeGroup(label: 'files', extensions: ['jpg', 'jpeg', 'png', 'pdf', 'mp4', 'mov', 'doc', 'docx']);
+      final XFile? file = await openFile(acceptedTypeGroups: [typeGroup]);
+      if (file == null) return;
+
+      final bytes = await file.readAsBytes();
+      // 1) Request presigned URLs from backend
+      final presignRes = await http.post(
+        Uri.parse('${URL.chatURL}/classes/request-presign'),
+        headers: {
+          'Authorization': 'Bearer ${widget.authToken}',
+          'Content-Type': 'application/json'
+        },
+        body: json.encode({ 'fileName': file.name, 'contentType': file.mimeType ?? 'application/octet-stream', 'classId': widget.classId }),
+      );
+
+      if (presignRes.statusCode != 200) {
+        print('Presign request failed: ${presignRes.statusCode} ${presignRes.body}');
+        return;
+      }
+
+      final presignData = json.decode(presignRes.body);
+      final uploadUrl = presignData['uploadUrl'];
+      final getUrl = presignData['getUrl'];
+      final key = presignData['key'];
+
+      // Insert optimistic local preview message so user sees their image immediately
+      try {
+        final base64Data = base64Encode(bytes);
+        final tempMessage = {
+          '_id': 'local_${DateTime.now().millisecondsSinceEpoch}',
+          'content': json.encode({ 'type': 'file', 'key': key, 'localPreviewBase64': base64Data, 'mime': file.mimeType ?? 'application/octet-stream', 'name': file.name }),
+          'sender': currentUserId,
+          'senderRole': currentUserRole,
+          'timestamp': DateTime.now().toIso8601String(),
+          'classId': widget.classId,
+        };
+        if (mounted) {
+          setState(() {
+            messages.add(tempMessage);
+          });
+        } else {
+          // Widget disposed; still update local list so state is consistent if re-mounted
+          messages.add(tempMessage);
+        }
+      } catch (e) {
+        print('Error creating local preview: $e');
+      }
+
+      // 2) Upload directly to S3 using PUT
+      final putRes = await http.put(Uri.parse(uploadUrl), headers: {
+        'Content-Type': file.mimeType ?? 'application/octet-stream'
+      }, body: bytes);
+
+      if (putRes.statusCode != 200 && putRes.statusCode != 204) {
+        print('PUT to S3 failed: ${putRes.statusCode} ${putRes.body}');
+        return;
+      }
+
+      // 3) Confirm upload with backend so it can create Message and publish
+      final confirmRes = await http.post(
+        Uri.parse('${URL.chatURL}/classes/confirm-upload'),
+        headers: {
+          'Authorization': 'Bearer ${widget.authToken}',
+          'Content-Type': 'application/json'
+        },
+        body: json.encode({ 'key': key, 'classId': widget.classId, 'getUrl': getUrl, 'contentType': file.mimeType ?? 'application/octet-stream', 'name': file.name, 'size': bytes.length }),
+      );
+
+      if (confirmRes.statusCode == 200) {
+        print('Upload confirmed');
+        // Do not add message locally; wait for server broadcast to avoid duplicates
+      } else {
+        print('Confirm failed: ${confirmRes.statusCode} ${confirmRes.body}');
+      }
+    } catch (e) {
+      print('Error uploading file: $e');
+    }
+  }
+
+  
+
+  Widget _buildFilePreview(Map parsed) {
+    final String url = parsed['url'] ?? '';
+    final String name = parsed['name'] ?? '';
+    final String mime = parsed['mime'] ?? '';
+    final String? base64Preview = parsed['localPreviewBase64'];
+
+    final bool isImage = mime.startsWith('image/');
+    final bool isVideo = mime.startsWith('video/');
+
+    final preview = Container(
+      constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.72),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade200,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: isImage
+            ? (base64Preview != null
+                ? SizedBox(height: 160, child: Image.memory(base64Decode(base64Preview), fit: BoxFit.cover))
+                : (url.isEmpty
+                    ? Container(height: 160, color: Colors.black12, child: Center(child: Icon(Icons.broken_image)))
+                    : SizedBox(
+                        height: 160,
+                        child: Image.network(url, fit: BoxFit.cover, loadingBuilder: (ctx, child, progress) {
+                          if (progress == null) return child;
+                          return Container(height: 160, child: Center(child: CircularProgressIndicator()));
+                        }),
+                      )) )
+            : Container(
+                height: 140,
+                padding: EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 96,
+                      height: 96,
+                      color: Colors.black12,
+                      child: Center(
+                        child: Icon(isVideo ? Icons.videocam : Icons.picture_as_pdf, size: 40),
+                      ),
+                    ),
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(name, style: TextStyle(fontWeight: FontWeight.bold)),
+                          SizedBox(height: 6),
+                          Text(mime, style: TextStyle(color: Colors.black54, fontSize: 12)),
+                        ],
+                      ),
+                    )
+                  ],
+                ),
+              ),
+      ),
+    );
+
+    // If there is no URL but we have a key and backend supports presigned GET, fetch it
+    if (url.isEmpty && (parsed['key'] != null)) {
+      _ensureUrlForParsed(parsed);
+    }
+
+    // Open the built-in full screen viewer for all media types so user can preview and download
+    return GestureDetector(
+      onTap: () {
+        final media = _getMediaMessages();
+        // try to find index of this url in media list
+        final idx = media.indexWhere((m) => (m['url'] ?? '') == url);
+        final start = idx >= 0 ? idx : 0;
+        Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => FullScreenMedia(initialIndex: start, mediaList: media),
+        ));
+      },
+      child: isVideo
+          ? Stack(
+              alignment: Alignment.center,
+              children: [
+                preview,
+                Icon(Icons.play_circle_outline, size: 56, color: Colors.white70),
+              ],
+            )
+          : preview,
+    );
+  }
+
+  Future<void> _ensureUrlForParsed(Map parsed) async {
+    try {
+      if (parsed['url'] != null && (parsed['url'] as String).isNotEmpty) return;
+      final key = parsed['key'];
+      if (key == null) return;
+      final res = await http.get(Uri.parse('${URL.chatURL}/classes/presign-get?key=$key'), headers: {'Authorization': 'Bearer ${widget.authToken}'});
+      if (res.statusCode == 200) {
+        final data = json.decode(res.body);
+        parsed['url'] = data['url'];
+        // Avoid calling setState if widget was disposed while awaiting network
+        if (!mounted) return;
+        setState(() {}); // trigger rebuild to show image
+      }
+    } catch (e) {
+      print('Error fetching presigned GET for key: $e');
+    }
+  }
 
   void sendTyping(bool typing) {
     if (socket.connected && currentUserId != null) {
@@ -255,11 +709,30 @@ class _ChatScreenState extends State<ChatScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Message text
-            Text(
-              msg['content'] ?? " ",
-              style: const TextStyle(fontSize: 16),
-            ),
+            // Message content (text or file)
+            Builder(builder: (_) {
+              final content = msg['content'];
+              dynamic parsed = content;
+              if (content is String) {
+                try {
+                  parsed = json.decode(content);
+                } catch (e) {
+                  parsed = content;
+                }
+              }
+
+                        if (parsed is Map && parsed['type'] == 'file') {
+                          print('File message parsed: $parsed');
+                          // Pass the whole parsed map so we can handle local preview (base64) and server URL
+                          return _buildFilePreview(parsed);
+                        }
+
+              // fallback: plain text
+              return Text(
+                parsed is String ? parsed : (parsed?.toString() ?? ' '),
+                style: const TextStyle(fontSize: 16),
+              );
+            }),
             const SizedBox(height: 4),
       
             // Bottom row: initials + timestamp
@@ -304,7 +777,21 @@ class _ChatScreenState extends State<ChatScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-        appBar: AppBar(title: Text(widget.className)),
+        appBar: AppBar(
+          title: Text(widget.className),
+          actions: [
+            IconButton(
+              icon: Icon(Icons.photo_library),
+              tooltip: 'Shared media',
+              onPressed: () {
+                final media = _getMediaMessages();
+                Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) => MediaGalleryScreen(mediaList: media),
+                ));
+              },
+            )
+          ],
+        ),
         body: Column(
           children: [
             Expanded(
@@ -341,9 +828,17 @@ class _ChatScreenState extends State<ChatScreen> {
                         ),
                       ),
                     ),
-                    IconButton(
-                      icon: Icon(Icons.send),
-                      onPressed: () => sendMessage(_controller.text),
+                    Row(
+                      children: [
+                        IconButton(
+                          icon: Icon(Icons.attach_file),
+                          onPressed: uploadFile,
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.send),
+                          onPressed: () => sendMessage(_controller.text),
+                        ),
+                      ],
                     ),
                   ],
                 ),
@@ -359,4 +854,5 @@ class _ChatScreenState extends State<ChatScreen> {
           ],
         ),
       );
+
 }
