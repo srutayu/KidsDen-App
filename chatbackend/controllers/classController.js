@@ -289,16 +289,36 @@ exports.uploadFile = async (req, res) => {
 // Generate presigned PUT (upload) and GET (download) URLs for direct client upload
 exports.requestPresign = async (req, res) => {
     try {
-        const { fileName, contentType, classId } = req.body;
+        // Support either single fileName/contentType or an array of files: { files: [{ fileName, contentType }, ...], classId }
         const senderId = req.user._id;
+        const { classId } = req.body;
 
-        if (!fileName || !contentType || !classId) return res.status(400).json({ message: 'fileName, contentType and classId are required' });
+        if (!classId) return res.status(400).json({ message: 'classId is required' });
 
         // permission check similar to uploadFile
         if (req.user.role === 'teacher') {
             const assigned = await Class.findOne({ _id: classId, teacherIds: senderId });
             if (!assigned) return res.status(403).json({ message: 'Not allowed to send file to this class' });
         }
+
+        // If files array provided, return array of presigns
+        if (Array.isArray(req.body.files)) {
+            const files = req.body.files.slice(0, 10); // limit to 10
+            const results = [];
+            for (const f of files) {
+                const fileName = f.fileName;
+                const contentType = f.contentType || 'application/octet-stream';
+                if (!fileName) continue;
+                const key = generateKey(fileName);
+                const { uploadUrl, getUrl } = await getPresignedPutAndGetUrls(key, contentType);
+                results.push({ fileName, uploadUrl, getUrl, key });
+            }
+            return res.status(200).json({ files: results });
+        }
+
+        // Backwards-compatible single-file flow
+        const { fileName, contentType } = req.body;
+        if (!fileName || !contentType) return res.status(400).json({ message: 'fileName and contentType are required' });
 
         const key = generateKey(fileName);
         const { uploadUrl, getUrl } = await getPresignedPutAndGetUrls(key, contentType);

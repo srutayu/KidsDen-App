@@ -11,6 +11,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'dart:io';
 import 'package:path_provider/path_provider.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:flutter/services.dart';
 
 class ChatScreen extends StatefulWidget {
   final String authToken;
@@ -102,12 +103,67 @@ class FullScreenMedia extends StatefulWidget {
 class _FullScreenMediaState extends State<FullScreenMedia> {
   late PageController _pageController;
   late int _currentIndex;
+  static final _platform = MethodChannel('kidsden/app_info');
 
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.initialIndex;
     _pageController = PageController(initialPage: _currentIndex);
+  }
+
+  Future<int?> _getAndroidSdkInt() async {
+    try {
+      final val = await _platform.invokeMethod<int>('getSdkInt');
+      return val;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Ensure appropriate storage/media permission for downloading the given item.
+  /// Returns true if permission is granted or not needed, false if denied.
+  Future<bool> _ensureStoragePermission(Map item) async {
+    if (!Platform.isAndroid) return true;
+
+    final sdkInt = (await _getAndroidSdkInt()) ?? 0;
+    try {
+      if (sdkInt >= 33) {
+        final mime = item['mime'] as String? ?? '';
+        Permission perm = mime.startsWith('image/') ? Permission.photos : mime.startsWith('video/') ? Permission.videos : Permission.storage;
+        final status = await perm.status;
+        if (!status.isGranted) {
+          final res = await perm.request();
+          if (!res.isGranted) {
+            if (res.isPermanentlyDenied) await openAppSettings();
+            return false;
+          }
+        }
+      } else if (sdkInt >= 30) {
+        final manageStatus = await Permission.manageExternalStorage.status;
+        if (!manageStatus.isGranted) {
+          final res = await Permission.manageExternalStorage.request();
+          if (!res.isGranted) {
+            if (res.isPermanentlyDenied) await openAppSettings();
+            return false;
+          }
+        }
+      } else {
+        final status = await Permission.storage.status;
+        if (!status.isGranted) {
+          final res = await Permission.storage.request();
+          if (!res.isGranted) {
+            if (res.isPermanentlyDenied) await openAppSettings();
+            return false;
+          }
+        }
+      }
+    } catch (e) {
+      print('Error ensuring storage permission: $e');
+      return true;
+    }
+
+    return true;
   }
 
   @override
@@ -178,17 +234,9 @@ class _FullScreenMediaState extends State<FullScreenMedia> {
     }
 
     try {
-      // Request storage permission on Android if needed
-      if (Platform.isAndroid) {
-        final status = await Permission.storage.status;
-        if (!status.isGranted) {
-          final res = await Permission.storage.request();
-          if (!res.isGranted) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Storage permission denied')));
-            return;
-          }
-        }
-      }
+      // Ensure storage permission is granted before attempting download
+      final ok = await _ensureStoragePermission(item);
+      if (!ok) return;
 
       final resp = await http.get(Uri.parse(url));
       if (resp.statusCode != 200) {
@@ -435,18 +483,23 @@ class _ChatScreenState extends State<ChatScreen> {
     if (currentUserId == null) return;
     try {
       final XTypeGroup typeGroup = XTypeGroup(label: 'files', extensions: ['jpg', 'jpeg', 'png', 'pdf', 'mp4', 'mov', 'doc', 'docx']);
-      final XFile? file = await openFile(acceptedTypeGroups: [typeGroup]);
-      if (file == null) return;
+      // Allow multiple file selection (max 10)
+      final List<XFile>? files = await openFiles(acceptedTypeGroups: [typeGroup]);
+      if (files == null || files.isEmpty) return;
 
-      final bytes = await file.readAsBytes();
-      // 1) Request presigned URLs from backend
+      final selection = files.take(10).toList();
+
+      // Prepare metadata for presign request
+      final filesMeta = selection.map((f) => ({ 'fileName': f.name, 'contentType': f.mimeType ?? 'application/octet-stream' })).toList();
+
+      // 1) Request batch presigned URLs from backend
       final presignRes = await http.post(
         Uri.parse('${URL.chatURL}/classes/request-presign'),
         headers: {
           'Authorization': 'Bearer ${widget.authToken}',
           'Content-Type': 'application/json'
         },
-        body: json.encode({ 'fileName': file.name, 'contentType': file.mimeType ?? 'application/octet-stream', 'classId': widget.classId }),
+        body: json.encode({ 'files': filesMeta, 'classId': widget.classId }),
       );
 
       if (presignRes.statusCode != 200) {
@@ -455,61 +508,78 @@ class _ChatScreenState extends State<ChatScreen> {
       }
 
       final presignData = json.decode(presignRes.body);
-      final uploadUrl = presignData['uploadUrl'];
-      final getUrl = presignData['getUrl'];
-      final key = presignData['key'];
+      final presignedFiles = presignData['files'] as List<dynamic>? ?? [];
 
-      // Insert optimistic local preview message so user sees their image immediately
-      try {
-        final base64Data = base64Encode(bytes);
-        final tempMessage = {
-          '_id': 'local_${DateTime.now().millisecondsSinceEpoch}',
-          'content': json.encode({ 'type': 'file', 'key': key, 'localPreviewBase64': base64Data, 'mime': file.mimeType ?? 'application/octet-stream', 'name': file.name }),
-          'sender': currentUserId,
-          'senderRole': currentUserRole,
-          'timestamp': DateTime.now().toIso8601String(),
-          'classId': widget.classId,
-        };
-        if (mounted) {
-          setState(() {
-            messages.add(tempMessage);
-          });
-        } else {
-          // Widget disposed; still update local list so state is consistent if re-mounted
-          messages.add(tempMessage);
+      // Map keys by original name for pairing
+      final presignMap = { for (var p in presignedFiles) p['fileName'] : p };
+
+      // For each selected file, upload and confirm
+      for (final f in selection) {
+        try {
+          final bytes = await f.readAsBytes();
+          final pres = presignMap[f.name];
+          if (pres == null) {
+            print('No presign returned for ${f.name}');
+            continue;
+          }
+
+          final uploadUrl = pres['uploadUrl'];
+          final getUrl = pres['getUrl'];
+          final key = pres['key'];
+
+          // Insert optimistic local preview message
+          try {
+            final base64Data = base64Encode(bytes);
+            final tempMessage = {
+              '_id': 'local_${DateTime.now().millisecondsSinceEpoch}_${f.name}',
+              'content': json.encode({ 'type': 'file', 'key': key, 'localPreviewBase64': base64Data, 'mime': f.mimeType ?? 'application/octet-stream', 'name': f.name }),
+              'sender': currentUserId,
+              'senderRole': currentUserRole,
+              'timestamp': DateTime.now().toIso8601String(),
+              'classId': widget.classId,
+            };
+            if (mounted) {
+              setState(() {
+                messages.add(tempMessage);
+              });
+            } else {
+              messages.add(tempMessage);
+            }
+          } catch (e) {
+            print('Error creating local preview: $e');
+          }
+
+          // 2) Upload directly to S3
+          final putRes = await http.put(Uri.parse(uploadUrl), headers: {
+            'Content-Type': f.mimeType ?? 'application/octet-stream'
+          }, body: bytes);
+
+          if (putRes.statusCode != 200 && putRes.statusCode != 204) {
+            print('PUT to S3 failed for ${f.name}: ${putRes.statusCode} ${putRes.body}');
+            continue;
+          }
+
+          // 3) Confirm upload
+          final confirmRes = await http.post(
+            Uri.parse('${URL.chatURL}/classes/confirm-upload'),
+            headers: {
+              'Authorization': 'Bearer ${widget.authToken}',
+              'Content-Type': 'application/json'
+            },
+            body: json.encode({ 'key': key, 'classId': widget.classId, 'getUrl': getUrl, 'contentType': f.mimeType ?? 'application/octet-stream', 'name': f.name, 'size': bytes.length }),
+          );
+
+          if (confirmRes.statusCode == 200) {
+            print('Upload confirmed for ${f.name}');
+          } else {
+            print('Confirm failed for ${f.name}: ${confirmRes.statusCode} ${confirmRes.body}');
+          }
+        } catch (e) {
+          print('Error uploading file ${f.name}: $e');
         }
-      } catch (e) {
-        print('Error creating local preview: $e');
-      }
-
-      // 2) Upload directly to S3 using PUT
-      final putRes = await http.put(Uri.parse(uploadUrl), headers: {
-        'Content-Type': file.mimeType ?? 'application/octet-stream'
-      }, body: bytes);
-
-      if (putRes.statusCode != 200 && putRes.statusCode != 204) {
-        print('PUT to S3 failed: ${putRes.statusCode} ${putRes.body}');
-        return;
-      }
-
-      // 3) Confirm upload with backend so it can create Message and publish
-      final confirmRes = await http.post(
-        Uri.parse('${URL.chatURL}/classes/confirm-upload'),
-        headers: {
-          'Authorization': 'Bearer ${widget.authToken}',
-          'Content-Type': 'application/json'
-        },
-        body: json.encode({ 'key': key, 'classId': widget.classId, 'getUrl': getUrl, 'contentType': file.mimeType ?? 'application/octet-stream', 'name': file.name, 'size': bytes.length }),
-      );
-
-      if (confirmRes.statusCode == 200) {
-        print('Upload confirmed');
-        // Do not add message locally; wait for server broadcast to avoid duplicates
-      } else {
-        print('Confirm failed: ${confirmRes.statusCode} ${confirmRes.body}');
       }
     } catch (e) {
-      print('Error uploading file: $e');
+      print('Error uploading files: $e');
     }
   }
 
