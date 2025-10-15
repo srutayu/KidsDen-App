@@ -479,6 +479,17 @@ exports.deleteMessage = async (req, res) => {
         const msg = await Message.findById(messageId);
         if (!msg) return res.status(404).json({ message: 'Message not found' });
 
+        // Authorization: only the original sender may delete their message
+        try {
+            const requesterId = req.user && (req.user._id || req.user.id || req.user);
+            if (!requesterId || msg.sender.toString() !== requesterId.toString()) {
+                return res.status(403).json({ message: 'Forbidden: only the sender can delete this message' });
+            }
+        } catch (e) {
+            // fallback deny
+            return res.status(403).json({ message: 'Forbidden' });
+        }
+
         // parse content and delete S3 objects if type=file
         let content = msg.content;
         try { content = JSON.parse(content); } catch (e) { content = null; }

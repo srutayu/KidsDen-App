@@ -1027,11 +1027,16 @@ class _ChatScreenState extends State<ChatScreen> {
 
     );
 
-    // Wrap with long-press delete handler so all messages can be deleted uniformly
-    return GestureDetector(
-      onLongPress: () => _attemptDeleteMessage(msg['_id'] as String? ?? '', msg),
-      child: bubble,
-    );
+    // Only allow long-press delete for messages sent by the current user
+    if (isMe) {
+      return GestureDetector(
+        onLongPress: () => _attemptDeleteMessage(msg['_id'] as String? ?? '', msg),
+        child: bubble,
+      );
+    }
+
+    // For messages not sent by the current user, just return the bubble (no delete option)
+    return bubble;
   }
 
   /// Attempt to delete a message. If the message is optimistic (local_ id) it
@@ -1051,7 +1056,8 @@ class _ChatScreenState extends State<ChatScreen> {
     final senderIdLocal = msg['sender'] ?? '';
     final currentUserIdLocal = Provider.of<UserProvider>(context, listen: false).user?.id;
     if (currentUserIdLocal == null) return;
-    if (!(currentUserIdLocal == senderIdLocal || currentUserRole == 'admin' || currentUserRole == 'teacher')) {
+    // Only allow delete when the current user is the original sender. Server also enforces this.
+    if (currentUserIdLocal != senderIdLocal) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('You do not have permission to delete this message')));
       return;
