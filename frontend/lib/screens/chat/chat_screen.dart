@@ -9,20 +9,16 @@ import 'dart:convert';
 import 'package:file_selector/file_selector.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'dart:io';
-import 'package:path_provider/path_provider.dart';
-import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter/services.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:path_provider/path_provider.dart';
 
 class ChatScreen extends StatefulWidget {
   final String authToken;
   final String classId;
   final String className;
 
-  ChatScreen({
-    required this.authToken,
-    required this.classId,
-    required this.className,
-  });
+  ChatScreen({required this.authToken, required this.classId, required this.className});
 
   @override
   _ChatScreenState createState() => _ChatScreenState();
@@ -435,16 +431,42 @@ class _ChatScreenState extends State<ChatScreen> {
                 final key = parsedIncoming['key'];
                 final idx = messages.indexWhere((m) {
                   try {
+                    final id = m['_id'] as String? ?? '';
                     final pc = m['content'] is String ? json.decode(m['content']) : m['content'];
-                    return pc is Map && pc['key'] == key && pc['localPreviewBase64'] != null;
+                    // Match any optimistic local message (id startsWith 'local_') with same key,
+                    // or a message that still has a local preview/path. This avoids races where
+                    // localPreviewBase64 was removed before the server relay arrives.
+                    return pc is Map && pc['key'] == key && (id.startsWith('local_') || pc['localPreviewBase64'] != null || pc['localPath'] != null);
                   } catch (e) { return false; }
                 });
                 if (idx >= 0) {
                   // preserve local id removed -> capture local id so we can clear uploading state
                   final localId = messages[idx]['_id'];
+                  // Preserve optimistic localPreviewBase64 if present so UI keeps showing the preview until
+                  // the server-supplied URL or thumbnail is available (prevents flicker)
+                  try {
+                    final existingContent = messages[idx]['content'];
+                    dynamic existingParsed = existingContent;
+                    if (existingContent is String) existingParsed = json.decode(existingContent);
+
+                    dynamic serverParsed = formattedMessage['content'];
+                    if (serverParsed is String) serverParsed = json.decode(serverParsed);
+
+                    if (existingParsed is Map && existingParsed['localPreviewBase64'] != null && serverParsed is Map) {
+                      // only copy localPreviewBase64 if server hasn't provided a URL or thumbnail yet
+                      if ((serverParsed['url'] == null || (serverParsed['url'] as String).isEmpty) && (serverParsed['thumbnailUrl'] == null || (serverParsed['thumbnailUrl'] as String).isEmpty)) {
+                        serverParsed['localPreviewBase64'] = existingParsed['localPreviewBase64'];
+                        formattedMessage['content'] = json.encode(serverParsed);
+                      }
+                    }
+                  } catch (e) {
+                    // ignore parse errors and proceed with replacement
+                  }
+
+                  // Replace the optimistic message with server message; outer setState will handle UI update
                   messages[idx] = formattedMessage;
-                  // clear uploading flag for the optimistic id
-                  if (mounted) setState(() { uploadingKeys.remove(localId); });
+                  // clear uploading flag for the optimistic id (no nested setState; outer setState encompasses this change)
+                  uploadingKeys.remove(localId);
                 } else {
                   messages.add(formattedMessage);
                 }
@@ -587,15 +609,39 @@ class _ChatScreenState extends State<ChatScreen> {
 
           if (confirmRes.statusCode == 200) {
             print('Upload confirmed for ${f.name}');
+            // Try to parse returned message (if server returned it) and replace optimistic message
+            try {
+              final respBody = json.decode(confirmRes.body);
+              // if server returns created message directly
+              if (respBody != null && (respBody['_id'] != null || respBody['message'] != null)) {
+                Map serverMsg = respBody;
+                if (respBody['message'] != null) serverMsg = respBody['message'];
+                // replace any optimistic message with same key
+                final serverKey = (serverMsg['content'] is String) ? (() { try { return json.decode(serverMsg['content'])['key']; } catch (e) { return null; } })() : (serverMsg['content'] is Map ? serverMsg['content']['key'] : null);
+                if (serverKey != null) {
+                  final idx = messages.indexWhere((m) {
+                    try {
+                      final id = m['_id'] as String? ?? '';
+                      final pc = m['content'] is String ? json.decode(m['content']) : m['content'];
+                      return pc is Map && pc['key'] == serverKey && (id.startsWith('local_') || pc['localPreviewBase64'] != null || pc['localPath'] != null);
+                    } catch (e) { return false; }
+                  });
+                  if (idx >= 0) {
+                    setState(() {
+                      messages[idx] = serverMsg;
+                    });
+                  }
+                }
+              }
+            } catch (e) {
+              // ignore parse errors
+            }
           } else {
             print('Confirm failed for ${f.name}: ${confirmRes.statusCode} ${confirmRes.body}');
           }
-          // remove uploading flag for this file (match by suffix of temp id)
-          if (mounted) {
-            setState(() {
-              uploadingKeys.removeWhere((k) => k.endsWith('_${f.name}'));
-            });
-          }
+
+          // Always clear uploading flag for any local optimistic message that matches this file key
+          _clearUploadingForKey(key);
         } catch (e) {
           print('Error uploading file ${f.name}: $e');
         }
@@ -607,7 +653,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   
 
-  Widget _buildFilePreview(Map parsed) {
+  Widget _buildFilePreview(Map parsed, String messageId) {
     final String url = parsed['url'] ?? '';
     final String name = parsed['name'] ?? '';
     final String mime = parsed['mime'] ?? '';
@@ -616,7 +662,7 @@ class _ChatScreenState extends State<ChatScreen> {
     final bool isImage = mime.startsWith('image/');
     final bool isVideo = mime.startsWith('video/');
 
-    final preview = Container(
+  final preview = Container(
       constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.72),
       decoration: BoxDecoration(
         color: Colors.grey.shade200,
@@ -631,10 +677,30 @@ class _ChatScreenState extends State<ChatScreen> {
                     ? Container(height: 160, color: Colors.black12, child: Center(child: Icon(Icons.broken_image)))
                     : SizedBox(
                         height: 160,
-                        child: Image.network(url, fit: BoxFit.cover, loadingBuilder: (ctx, child, progress) {
-                          if (progress == null) return child;
-                          return Container(height: 160, child: Center(child: CircularProgressIndicator()));
-                        }),
+                        child: Image.network(
+                          url,
+                          fit: BoxFit.cover,
+                          loadingBuilder: (ctx, child, progress) {
+                            if (progress == null) return child;
+                            return Container(height: 160, child: Center(child: CircularProgressIndicator()));
+                          },
+                          errorBuilder: (ctx, error, stack) {
+                            // If network image fails (403 or other), request a fresh presigned GET and keep showing base64 preview or a placeholder.
+                            // Use a microtask so we don't call setState synchronously during build.
+                            Future.microtask(() {
+                              try {
+                                _ensureUrlForParsed(parsed, messageId, force: true);
+                              } catch (e) {
+                                // ignore
+                              }
+                            });
+
+                            if (base64Preview != null) {
+                              return SizedBox(height: 160, child: Image.memory(base64Decode(base64Preview), fit: BoxFit.cover));
+                            }
+                            return Container(height: 160, color: Colors.black12, child: Center(child: Icon(Icons.broken_image)));
+                          },
+                        ),
                       )) )
             : Container(
                 height: 140,
@@ -667,9 +733,9 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
     );
 
-    // If there is no URL but we have a key and backend supports presigned GET, fetch it
-    if (url.isEmpty && (parsed['key'] != null)) {
-      _ensureUrlForParsed(parsed);
+    // If there is no URL but we have a key and backend supports presigned GET, fetch it once
+    if (url.isEmpty && (parsed['key'] != null) && parsed['_presignRequested'] != true) {
+      _ensureUrlForParsed(parsed, messageId);
     }
 
     // Open the built-in full screen viewer for all media types so user can preview and download
@@ -683,7 +749,7 @@ class _ChatScreenState extends State<ChatScreen> {
           builder: (_) => FullScreenMedia(initialIndex: start, mediaList: media),
         ));
       },
-      child: isVideo
+    child: isVideo
           ? Stack(
               alignment: Alignment.center,
               children: [
@@ -695,18 +761,72 @@ class _ChatScreenState extends State<ChatScreen> {
     );
   }
 
-  Future<void> _ensureUrlForParsed(Map parsed) async {
+  Future<void> _ensureUrlForParsed(Map parsed, String messageId, {bool force = false}) async {
     try {
-      if (parsed['url'] != null && (parsed['url'] as String).isNotEmpty) return;
+      if (!force && parsed['url'] != null && (parsed['url'] as String).isNotEmpty) return;
       final key = parsed['key'];
       if (key == null) return;
+      // If we've already requested a presign and not forcing, skip
+      if (!force && parsed['_presignRequested'] == true) return;
       final res = await http.get(Uri.parse('${URL.chatURL}/classes/presign-get?key=$key'), headers: {'Authorization': 'Bearer ${widget.authToken}'});
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
         parsed['url'] = data['url'];
+        // mark that we requested presign for this parsed map so we don't request repeatedly
+        parsed['_presignRequested'] = true;
+        // Also update the stored message in messages list with the new parsed content (to persist localPreviewBase64)
+        if (mounted) {
+          final idx = messages.indexWhere((m) => m['_id'] == messageId);
+          if (idx >= 0) {
+            try {
+              final m = Map.of(messages[idx]);
+              dynamic cont = m['content'];
+              if (cont is String) cont = json.decode(cont);
+              if (cont is Map) {
+                cont['url'] = data['url'];
+                cont['_presignRequested'] = true;
+                m['content'] = json.encode(cont);
+                messages[idx] = m;
+              }
+            } catch (e) {
+              // ignore parse errors
+            }
+          }
+        }
         // Avoid calling setState if widget was disposed while awaiting network
         if (!mounted) return;
-        setState(() {}); // trigger rebuild to show image
+        setState(() {}); // trigger rebuild to show image (still showing base64 if present)
+
+        // Precache the network image so the UI can swap smoothly from base64 to network image
+        try {
+          final urlToCache = data['url'] as String?;
+          if (urlToCache != null && urlToCache.isNotEmpty) {
+            final image = NetworkImage(urlToCache);
+            await precacheImage(image, context);
+
+            // After successful precache, remove localPreviewBase64 from stored message so build uses network image
+            if (!mounted) return;
+            final idx2 = messages.indexWhere((m) => m['_id'] == messageId);
+            if (idx2 >= 0) {
+              try {
+                final m2 = Map.of(messages[idx2]);
+                dynamic cont2 = m2['content'];
+                if (cont2 is String) cont2 = json.decode(cont2);
+                if (cont2 is Map && (cont2['localPreviewBase64'] != null || cont2['localPath'] != null)) {
+                  cont2.remove('localPreviewBase64');
+                  cont2.remove('localPath');
+                  m2['content'] = json.encode(cont2);
+                  setState(() { messages[idx2] = m2; });
+                }
+              } catch (e) {
+                // ignore
+              }
+            }
+          }
+        } catch (e) {
+          // If precache fails, keep the base64 preview; it's fine to log
+          print('Image precache failed: $e');
+        }
       }
     } catch (e) {
       print('Error fetching presigned GET for key: $e');
@@ -728,6 +848,25 @@ class _ChatScreenState extends State<ChatScreen> {
       print('Socket not connected, attempting to reconnect...');
       socket.connect();
     }
+  }
+
+  void _clearUploadingForKey(String key) {
+    // Find any messages that are optimistic (local_) and whose content.key == key
+    final toRemove = <String>[];
+    for (final m in messages) {
+      try {
+        final cid = m['_id'] as String? ?? '';
+        if (!cid.startsWith('local_')) continue;
+        final cont = m['content'] is String ? json.decode(m['content']) : m['content'];
+        if (cont is Map && cont['key'] == key) toRemove.add(cid);
+      } catch (e) { continue; }
+    }
+    if (toRemove.isEmpty) return;
+    setState(() {
+      for (final id in toRemove) {
+        uploadingKeys.remove(id);
+      }
+    });
   }
 
   Future<void> loadUserNameIfNeeded(String userId) async {
@@ -776,6 +915,11 @@ class _ChatScreenState extends State<ChatScreen> {
   if (senderId.isNotEmpty) {
     loadUserNameIfNeeded(senderId);
   }
+
+  // Defensive: if message content is missing or empty, don't render a bubble
+  final rawContent = msg['content'];
+  if (rawContent == null) return SizedBox.shrink();
+  if (rawContent is String && rawContent.trim().isEmpty) return SizedBox.shrink();
 
   final senderName = userNamesCache[senderId] ?? '?';
   final initials = getInitials(senderName);
@@ -856,7 +1000,7 @@ class _ChatScreenState extends State<ChatScreen> {
                             },
                             child: Stack(
                               children: [
-                                _buildFilePreview(parsed),
+                                _buildFilePreview(parsed, idKey),
                                 if (isUploading) Positioned.fill(child: Container(color: Colors.black26, child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [CircularProgressIndicator(), SizedBox(height:8), Text('Uploading...', style: TextStyle(color: Colors.white))])))),
                               ],
                             ),
