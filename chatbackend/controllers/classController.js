@@ -84,9 +84,13 @@ exports.getMessages = async (req, res) => {
                 try {
                     const parsed = JSON.parse(content);
                     if (parsed && parsed.type === 'file' && parsed.key) {
-                        const url = await getPresignedGetUrl(parsed.key);
-                        parsed.url = url;
-                        content = JSON.stringify(parsed);
+                        try {
+                            const url = await getPresignedGetUrl(parsed.key);
+                            parsed.url = url;
+                            content = JSON.stringify(parsed);
+                        } catch (e) {
+                            console.warn('Failed to presign GET for message:', msg._id, e && (e.message || e));
+                        }
                     }
                 } catch (e) {
                     // ignore non-json
@@ -231,7 +235,14 @@ exports.uploadFile = async (req, res) => {
         }
 
         // Upload to S3
-        const { url: uploadUrl, key } = await uploadBufferToS3(file.buffer, file.originalname, file.mimetype);
+        let uploadResult;
+        try {
+            uploadResult = await uploadBufferToS3(file.buffer, file.originalname, file.mimetype);
+        } catch (e) {
+            console.error('S3 upload failed:', e && (e.message || e));
+            return res.status(500).json({ message: 'Failed to upload file to storage' });
+        }
+        const { url: uploadUrl, key } = uploadResult;
 
         // If presign mode is enabled, always generate a server-side presigned GET URL for emission
         let emitUrl = uploadUrl;
@@ -446,8 +457,13 @@ exports.presignGet = async (req, res) => {
         if (!key) return res.status(400).json({ message: 'key is required' });
 
         const { getPresignedGetUrl } = require('../utils/s3');
-        const url = await getPresignedGetUrl(key);
-        return res.status(200).json({ url });
+        try {
+            const url = await getPresignedGetUrl(key);
+            return res.status(200).json({ url });
+        } catch (e) {
+            console.error('Error generating presigned GET for key', key, e && (e.message || e));
+            return res.status(500).json({ message: 'Failed to generate presigned URL' });
+        }
     } catch (err) {
         console.error('Error generating presigned GET:', err);
         return res.status(500).json({ message: 'Server error' });

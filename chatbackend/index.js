@@ -68,18 +68,21 @@ sub.on('message', (channel, message) => {
             // keep original content
           }
         }
+        // Send message to ALL users in the room (only if room and required fields exist)
+        if (room && data._id && data.classId) {
+          io.to(room).emit('message', {
+            _id: data._id,
+            classId: data.classId,
+            content: content, // Send as 'content' to match frontend expectation
+            sender: data.sender,
+            senderRole: data.senderRole,
+            timestamp: data.timestamp
+          });
 
-        // Send message to ALL users in the room
-        io.to(room).emit('message', {
-          _id: data._id,
-          classId: data.classId,
-          content: content, // Send as 'content' to match frontend expectation
-          sender: data.sender,
-          senderRole: data.senderRole,
-          timestamp: data.timestamp
-        });
-
-        console.log(`Message sent to room ${room}:`, data.message);
+          console.log(`Message sent to room ${room}`);
+        } else {
+          console.warn('Invalid redis message data, skipping emit:', data);
+        }
       } catch (err) {
         console.error('Error while relaying redis message:', err);
       }

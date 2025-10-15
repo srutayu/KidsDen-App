@@ -88,10 +88,19 @@ async function getObjectBuffer(key) {
   const data = await s3Client.send(cmd);
   const stream = data.Body;
   return await new Promise((resolve, reject) => {
-    const chunks = [];
-    stream.on('data', (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
-    stream.on('end', () => resolve(Buffer.concat(chunks)));
-    stream.on('error', (err) => reject(err));
+    try {
+      if (!stream || typeof stream.on !== 'function') return reject(new Error('Invalid stream from S3 getObject'));
+      const chunks = [];
+      stream.on('data', (chunk) => {
+        try { chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)); } catch (e) { /* ignore chunk errors */ }
+      });
+      stream.on('end', () => {
+        try { resolve(Buffer.concat(chunks)); } catch (e) { reject(e); }
+      });
+      stream.on('error', (err) => reject(err));
+    } catch (e) {
+      reject(e);
+    }
   });
 }
 
