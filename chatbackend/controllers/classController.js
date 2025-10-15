@@ -357,36 +357,82 @@ exports.confirmUpload = async (req, res) => {
 
         const fileContent = { type: 'file', url, key, name: origName, mime };
 
-        const savedMsg = await Message.create({
-            classId,
-            sender: senderId,
-            content: JSON.stringify(fileContent),
-            timestamp: new Date()
-        });
-
-        const messageData = {
-            _id: savedMsg._id.toString(),
-            classId,
-            message: JSON.stringify(fileContent),
-            sender: senderId,
-            senderRole: req.user.role,
-            timestamp: savedMsg.timestamp.toISOString()
-        };
-
-        await pub.publish('chatMessages', JSON.stringify(messageData));
-
-        if (req.app.get('io')) {
-            req.app.get('io').to(`class_${classId}`).emit('message', {
-                _id: messageData._id,
-                classId: messageData.classId,
-                content: JSON.parse(messageData.message),
-                sender: messageData.sender,
-                senderRole: messageData.senderRole,
-                timestamp: messageData.timestamp
-            });
+        // Ensure idempotency: if a message already exists for this key in this class, return it
+        let existing = null;
+        try {
+            // find messages in this class whose content contains the key
+            existing = await Message.findOne({ classId, content: { $regex: key } });
+        } catch (e) {
+            // ignore regex/search errors and proceed to create
+            existing = null;
         }
 
-        return res.status(200).json({ success: true });
+        let savedMsg = existing;
+        if (!savedMsg) {
+            savedMsg = await Message.create({
+                classId,
+                sender: senderId,
+                content: JSON.stringify(fileContent),
+                timestamp: new Date()
+            });
+
+            // publish the message via redis so other socket instances receive it
+            const messageData = {
+                _id: savedMsg._id.toString(),
+                classId,
+                message: JSON.stringify(fileContent),
+                sender: senderId,
+                senderRole: req.user.role,
+                timestamp: savedMsg.timestamp.toISOString()
+            };
+
+            await pub.publish('chatMessages', JSON.stringify(messageData));
+
+            if (req.app.get('io')) {
+                req.app.get('io').to(`class_${classId}`).emit('message', {
+                    _id: messageData._id,
+                    classId: messageData.classId,
+                    content: JSON.parse(messageData.message),
+                    sender: messageData.sender,
+                    senderRole: messageData.senderRole,
+                    timestamp: messageData.timestamp
+                });
+            }
+        } else {
+            // If message already existed, ensure we still inform other instances via redis emit (optional)
+            const existingData = {
+                _id: savedMsg._id.toString(),
+                classId,
+                message: savedMsg.content,
+                sender: savedMsg.sender,
+                senderRole: req.user.role,
+                timestamp: savedMsg.timestamp.toISOString()
+            };
+            // publish existing message so any subscribers that missed it get it
+            try { await pub.publish('chatMessages', JSON.stringify(existingData)); } catch (e) { /* ignore */ }
+            if (req.app.get('io')) {
+                try {
+                    req.app.get('io').to(`class_${classId}`).emit('message', {
+                        _id: existingData._id,
+                        classId: existingData.classId,
+                        content: JSON.parse(existingData.message),
+                        sender: existingData.sender,
+                        senderRole: existingData.senderRole,
+                        timestamp: existingData.timestamp
+                    });
+                } catch (e) { /* ignore parse/emit errors */ }
+            }
+        }
+
+        // Return the saved (or existing) message so the client can replace optimistic message immediately
+        return res.status(200).json({ message: {
+            _id: savedMsg._id.toString(),
+            content: savedMsg.content,
+            sender: savedMsg.sender,
+            senderRole: req.user.role,
+            timestamp: savedMsg.timestamp.toISOString(),
+            classId: savedMsg.classId
+        }});
     } catch (err) {
         console.error('Error confirming upload:', err);
         return res.status(500).json({ message: 'Server error' });
