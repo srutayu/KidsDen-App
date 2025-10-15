@@ -8,7 +8,7 @@ try {
   // ignore if dotenv isn't available in some environments
 }
 
-const { S3Client, PutObjectCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
+const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 const { v4: uuidv4 } = require('uuid');
 const mime = require('mime-types');
 const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
@@ -81,4 +81,24 @@ async function getPresignedGetUrl(key, expires = 3600) {
   return await getSignedUrl(s3Client, getCmd, { expiresIn: expires });
 }
 
-module.exports = { uploadBufferToS3, generateKey, getPresignedPutAndGetUrls, getPresignedGetUrl };
+// Fetch an object from S3 and return its full buffer. Useful for server-side processing
+async function getObjectBuffer(key) {
+  ensureS3Config();
+  const cmd = new GetObjectCommand({ Bucket: BUCKET, Key: key });
+  const data = await s3Client.send(cmd);
+  const stream = data.Body;
+  return await new Promise((resolve, reject) => {
+    const chunks = [];
+    stream.on('data', (chunk) => chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)));
+    stream.on('end', () => resolve(Buffer.concat(chunks)));
+    stream.on('error', (err) => reject(err));
+  });
+}
+
+async function deleteObject(key) {
+  ensureS3Config();
+  const cmd = new DeleteObjectCommand({ Bucket: BUCKET, Key: key });
+  await s3Client.send(cmd);
+}
+
+module.exports = { uploadBufferToS3, generateKey, getPresignedPutAndGetUrls, getPresignedGetUrl, getObjectBuffer, deleteObject };

@@ -407,3 +407,39 @@ exports.presignGet = async (req, res) => {
         return res.status(500).json({ message: 'Server error' });
     }
 }
+
+// Delete message (and associated S3 objects if present)
+exports.deleteMessage = async (req, res) => {
+    try {
+        const { messageId } = req.params;
+        if (!messageId) return res.status(400).json({ message: 'messageId required' });
+
+        const msg = await Message.findById(messageId);
+        if (!msg) return res.status(404).json({ message: 'Message not found' });
+
+        // parse content and delete S3 objects if type=file
+        let content = msg.content;
+        try { content = JSON.parse(content); } catch (e) { content = null; }
+        if (content && content.type === 'file') {
+            try {
+                const { deleteObject } = require('../utils/s3');
+                if (content.key) await deleteObject(content.key);
+                if (content.thumbnailKey) await deleteObject(content.thumbnailKey);
+            } catch (e) {
+                console.warn('Failed to delete S3 objects for message:', e.message || e);
+            }
+        }
+
+        // remove from DB
+        await Message.findByIdAndDelete(messageId);
+
+        // notify others via redis
+        const messageData = { _id: messageId, classId: msg.classId.toString(), deleted: true };
+        await pub.publish('chatMessages', JSON.stringify(messageData));
+
+        return res.status(200).json({ success: true });
+    } catch (err) {
+        console.error('Error deleting message:', err);
+        return res.status(500).json({ message: 'Server error' });
+    }
+}

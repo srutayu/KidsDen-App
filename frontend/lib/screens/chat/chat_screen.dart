@@ -273,6 +273,7 @@ class _FullScreenMediaState extends State<FullScreenMedia> {
 class _ChatScreenState extends State<ChatScreen> {
   late IO.Socket socket;
   List messages = [];
+  Set<String> uploadingKeys = {}; // keys or local ids currently uploading
   bool isTyping = false;
   TextEditingController _controller = TextEditingController();
 
@@ -397,6 +398,14 @@ class _ChatScreenState extends State<ChatScreen> {
 
     socket.on('message', (data) {
       print('Received message: $data');
+      // Handle server-side deletion relay
+      if (data != null && data['deleted'] == true && data['_id'] != null) {
+        if (!mounted) return;
+        setState(() {
+          messages.removeWhere((m) => m['_id'] == data['_id']);
+        });
+        return;
+      }
       if (mounted) {
         setState(() {
           // Check if message already exists to prevent duplicates using multiple criteria
@@ -431,7 +440,11 @@ class _ChatScreenState extends State<ChatScreen> {
                   } catch (e) { return false; }
                 });
                 if (idx >= 0) {
+                  // preserve local id removed -> capture local id so we can clear uploading state
+                  final localId = messages[idx]['_id'];
                   messages[idx] = formattedMessage;
+                  // clear uploading flag for the optimistic id
+                  if (mounted) setState(() { uploadingKeys.remove(localId); });
                 } else {
                   messages.add(formattedMessage);
                 }
@@ -530,8 +543,9 @@ class _ChatScreenState extends State<ChatScreen> {
           // Insert optimistic local preview message
           try {
             final base64Data = base64Encode(bytes);
+            final tempId = 'local_${DateTime.now().millisecondsSinceEpoch}_${f.name}';
             final tempMessage = {
-              '_id': 'local_${DateTime.now().millisecondsSinceEpoch}_${f.name}',
+              '_id': tempId,
               'content': json.encode({ 'type': 'file', 'key': key, 'localPreviewBase64': base64Data, 'mime': f.mimeType ?? 'application/octet-stream', 'name': f.name }),
               'sender': currentUserId,
               'senderRole': currentUserRole,
@@ -541,9 +555,11 @@ class _ChatScreenState extends State<ChatScreen> {
             if (mounted) {
               setState(() {
                 messages.add(tempMessage);
+                uploadingKeys.add(tempId);
               });
             } else {
               messages.add(tempMessage);
+              uploadingKeys.add(tempId);
             }
           } catch (e) {
             print('Error creating local preview: $e');
@@ -573,6 +589,12 @@ class _ChatScreenState extends State<ChatScreen> {
             print('Upload confirmed for ${f.name}');
           } else {
             print('Confirm failed for ${f.name}: ${confirmRes.statusCode} ${confirmRes.body}');
+          }
+          // remove uploading flag for this file (match by suffix of temp id)
+          if (mounted) {
+            setState(() {
+              uploadingKeys.removeWhere((k) => k.endsWith('_${f.name}'));
+            });
           }
         } catch (e) {
           print('Error uploading file ${f.name}: $e');
@@ -792,9 +814,53 @@ class _ChatScreenState extends State<ChatScreen> {
               }
 
                         if (parsed is Map && parsed['type'] == 'file') {
-                          print('File message parsed: $parsed');
                           // Pass the whole parsed map so we can handle local preview (base64) and server URL
-                          return _buildFilePreview(parsed);
+                          final idKey = msg['_id'] as String? ?? '';
+                          final senderIdLocal = msg['sender'] ?? '';
+                          final bool isUploading = uploadingKeys.contains(idKey) || idKey.startsWith('local_');
+                          return GestureDetector(
+                            onLongPress: () async {
+                              // If this is an optimistic local message, allow local removal
+                              if (idKey.startsWith('local_')) {
+                                if (!mounted) return;
+                                setState(() { messages.removeWhere((m) => m['_id'] == idKey); uploadingKeys.remove(idKey); });
+                                return;
+                              }
+
+                              // Check permission: sender or admin/teacher can delete
+                              final currentUserIdLocal = Provider.of<UserProvider>(context, listen: false).user?.id;
+                              if (currentUserIdLocal == null) return;
+                              if (!(currentUserIdLocal == senderIdLocal || currentUserRole == 'admin' || currentUserRole == 'teacher')) {
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('You do not have permission to delete this message')));
+                                return;
+                              }
+
+                              final should = await showDialog<bool>(context: context, builder: (ctx) => AlertDialog(
+                                title: Text('Delete message?'),
+                                content: Text('This will remove the message and any attached files.'),
+                                actions: [ TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text('Cancel')), TextButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text('Delete')) ],
+                              ));
+                              if (should != true) return;
+
+                              try {
+                                final res = await http.delete(Uri.parse('${URL.chatURL}/classes/delete-message/${idKey}'), headers: {'Authorization': 'Bearer ${widget.authToken}'});
+                                if (res.statusCode == 200) {
+                                  if (!mounted) return;
+                                  setState(() { messages.removeWhere((m) => m['_id'] == idKey); });
+                                } else {
+                                  ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to delete')));
+                                }
+                              } catch (e) {
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Delete failed: $e')));
+                              }
+                            },
+                            child: Stack(
+                              children: [
+                                _buildFilePreview(parsed),
+                                if (isUploading) Positioned.fill(child: Container(color: Colors.black26, child: Center(child: Column(mainAxisSize: MainAxisSize.min, children: [CircularProgressIndicator(), SizedBox(height:8), Text('Uploading...', style: TextStyle(color: Colors.white))])))),
+                              ],
+                            ),
+                          );
                         }
 
               // fallback: plain text
