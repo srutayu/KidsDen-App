@@ -9,7 +9,7 @@ require('dotenv').config();
 
 exports.registerUser = async (req, res) => {
     try {
-        const {name, email, password, role} = req.body;
+        const {name, email, phone,  password, role} = req.body;
         if(!name || !email || !password) {
             return res.status(400).json({ message: 'Please provide all required fields' });
         }
@@ -18,10 +18,18 @@ exports.registerUser = async (req, res) => {
         if (!emailRegex.test(email)) {
             return res.status(400).send('Invalid email format');
         }
-
+        
         if(password.length < 6) {
             return res.status(400).json({ message: 'Password must be at least 6 characters' });
         }
+        
+        if(!phone) {
+            return res.status(400).json({ message: 'Phone number is required' });
+        }
+        const phoneRegex = /^\d{10}$/; // Simple regex for 10 digit phone numbers
+        if (!phoneRegex.test(phone)) {
+            return res.status(400).json({ message: 'Invalid phone number format' });
+        }   
 
         if(role && !['student','admin','teacher'].includes(role)) {
             return res.status(400).json({ message: 'Invalid role' });
@@ -35,8 +43,8 @@ exports.registerUser = async (req, res) => {
         if(existingUser) {
             return res.status(400).json({ message: 'User already exists' });
         }
-        
-    const user = new User({ name, email, password, role });
+
+    const user = new User({ name, email, password, role, phone });
     await user.save();
     accountCreatedConfirmationEmail(email, name).catch(err => console.error('Account creation email error:', err));
 
@@ -45,6 +53,7 @@ exports.registerUser = async (req, res) => {
             name: user.name,
             email: user.email,
             role: user.role,
+            phone: user.phone,
         });
 
     }catch (error) {
