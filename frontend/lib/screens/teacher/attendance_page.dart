@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:frontend/controllers/teacher_controller.dart';
 import 'package:frontend/models/classroom_model.dart';
 import 'package:frontend/provider/auth_provider.dart';
+import 'package:frontend/screens/widgets/toast_message.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
@@ -44,7 +45,8 @@ class _AttendancePageState extends State<AttendancePage> {
   }
 
   void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    // ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    showToast(msg);
   }
 
   Future<void> _loadClassMembers(String classId) async {
@@ -91,9 +93,7 @@ class _AttendancePageState extends State<AttendancePage> {
     );
 
     setState(() => _loading = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Attendance submitted successfully!')),
-    );
+    showToast('Attendance for ${DateFormat('dd-MM-yyyy').format(DateTime.now())} submitted!');
   } catch (e) {
     setState(() => _loading = false);
     _showError('Error submitting attendance: $e');

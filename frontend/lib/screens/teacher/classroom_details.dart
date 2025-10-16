@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:frontend/controllers/teacher_controller.dart'; // TeacherController file
 import 'package:frontend/models/classroom_model.dart';
 import 'package:frontend/provider/auth_provider.dart';
+import 'package:frontend/screens/widgets/toast_message.dart';
 import 'package:provider/provider.dart';
 
 class ClassroomDetailsTeacher extends StatefulWidget {
@@ -79,29 +80,58 @@ Future<void> _initializeData() async {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
+  
   Future<void> _addStudent(ClassroomModel student) async {
     if (_selectedClass == null) return;
     setState(() => _loading = true);
     try {
       await _controller.addStudents(_selectedClass!.id, [student.id], token);
       await _loadClassMembers(_selectedClass!.id);
+      showToast('${student.name} added to ${_selectedClass?.name}');
     } catch (e) {
       _showError('Failed to add student: $e');
+    } finally {
       setState(() => _loading = false);
     }
   }
 
   Future<void> _removeStudent(ClassroomModel student) async {
-    if (_selectedClass == null) return;
-    setState(() => _loading = true);
-    try {
-      await _controller.deleteStudent(_selectedClass!.id, student.id, token);
-      await _loadClassMembers(_selectedClass!.id);
-    } catch (e) {
-      _showError('Failed to remove student: $e');
-      setState(() => _loading = false);
-    }
+  if (_selectedClass == null) return;
+
+  final confirm = await showDialog<bool>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('Confirm Deletion'),
+      content: Text('Are you sure you want to remove ${student.name} from ${_selectedClass?.name}?'),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, false), // cancel
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: () => Navigator.pop(context, true), // confirm
+          style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white),
+          child: const Text('Delete'),
+        ),
+      ],
+    ),
+  );
+
+  // --- If user cancels, stop here ---
+  if (confirm != true) return;
+
+  // --- Proceed with deletion ---
+  setState(() => _loading = true);
+  try {
+    await _controller.deleteStudent(_selectedClass!.id, student.id, token);
+    await _loadClassMembers(_selectedClass!.id);
+    showToast('${student.name} deleted from ${_selectedClass?.name}');
+  } catch (e) {
+    _showError('Failed to remove student: $e');
+  } finally {
+    setState(() => _loading = false);
   }
+}
 
   void _showAddStudentDialog() {
     ClassroomModel? selected;
