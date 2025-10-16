@@ -1,8 +1,8 @@
 import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:frontend/constants/url.dart';
 import 'package:frontend/provider/user_data_provider.dart';
+import 'package:frontend/screens/chat/download_media.dart';
 import 'package:frontend/screens/chat/fullscreen_media.dart';
 import 'package:frontend/screens/chat/media_gallery.dart';
 import 'package:frontend/screens/chat/pdf_viewer.dart';
@@ -285,258 +285,469 @@ class _ChatScreenState extends State<ChatScreen> {
   sendTyping(false); // Stop typing indicator when message is sent
 }
 
-  Future<void> uploadFile() async {
-    if (currentUserId == null) return;
-    try {
-      final XTypeGroup typeGroup = XTypeGroup(label: 'files', extensions: ['jpg', 'jpeg', 'png', 'pdf', 'mp4', 'mov', 'doc', 'docx']);
-      // Allow multiple file selection (max 10)
-      final List<XFile>? files = await openFiles(acceptedTypeGroups: [typeGroup]);
-      if (files == null || files.isEmpty) return;
+  // Future<void> uploadFile() async {
+  //   if (currentUserId == null) return;
+  //   try {
+  //     final XTypeGroup typeGroup = XTypeGroup(label: 'files', extensions: ['jpg', 'jpeg', 'png', 'pdf', 'mp4', 'mov', 'doc', 'docx']);
+  //     // Allow multiple file selection (max 10)
+  //     final List<XFile>? files = await openFiles(acceptedTypeGroups: [typeGroup]);
+  //     if (files == null || files.isEmpty) return;
 
-      final selection = files.take(10).toList();
+  //     final selection = files.take(10).toList();
 
-      // Prepare metadata for presign request
-      final filesMeta = selection.map((f) => ({ 'fileName': f.name, 'contentType': f.mimeType ?? 'application/octet-stream' })).toList();
+  //     // Prepare metadata for presign request
+  //     final filesMeta = selection.map((f) => ({ 'fileName': f.name, 'contentType': f.mimeType ?? 'application/octet-stream' })).toList();
 
-      // 1) Request batch presigned URLs from backend
-      final presignRes = await http.post(
-        Uri.parse('${URL.chatURL}/classes/request-presign'),
-        headers: {
-          'Authorization': 'Bearer ${widget.authToken}',
-          'Content-Type': 'application/json'
-        },
-        body: json.encode({ 'files': filesMeta, 'classId': widget.classId }),
-      );
+  //     // 1) Request batch presigned URLs from backend
+  //     final presignRes = await http.post(
+  //       Uri.parse('${URL.chatURL}/classes/request-presign'),
+  //       headers: {
+  //         'Authorization': 'Bearer ${widget.authToken}',
+  //         'Content-Type': 'application/json'
+  //       },
+  //       body: json.encode({ 'files': filesMeta, 'classId': widget.classId }),
+  //     );
 
-      if (presignRes.statusCode != 200) {
-        print('Presign request failed: ${presignRes.statusCode} ${presignRes.body}');
-        return;
-      }
+  //     if (presignRes.statusCode != 200) {
+  //       print('Presign request failed: ${presignRes.statusCode} ${presignRes.body}');
+  //       return;
+  //     }
 
-      final presignData = json.decode(presignRes.body);
-      final presignedFiles = presignData['files'] as List<dynamic>? ?? [];
+  //     final presignData = json.decode(presignRes.body);
+  //     final presignedFiles = presignData['files'] as List<dynamic>? ?? [];
 
-      // Map keys by original name for pairing
-      final presignMap = { for (var p in presignedFiles) p['fileName'] : p };
+  //     // Map keys by original name for pairing
+  //     final presignMap = { for (var p in presignedFiles) p['fileName'] : p };
 
-      // For each selected file, upload and confirm
-      for (final f in selection) {
+  //     // For each selected file, upload and confirm
+  //     for (final f in selection) {
+  //       try {
+  //         final bytes = await f.readAsBytes();
+  //         final pres = presignMap[f.name];
+  //         if (pres == null) {
+  //           print('No presign returned for ${f.name}');
+  //           continue;
+  //         }
+
+  //         final uploadUrl = pres['uploadUrl'];
+  //         final getUrl = pres['getUrl'];
+  //         final key = pres['key'];
+
+  //         // Insert optimistic local preview message
+  //         try {
+  //           final base64Data = base64Encode(bytes);
+  //           final tempId = 'local_${DateTime.now().millisecondsSinceEpoch}_${f.name}';
+  //           final tempMessage = {
+  //             '_id': tempId,
+  //             'content': json.encode({ 'type': 'file', 'key': key, 'localPreviewBase64': base64Data, 'mime': f.mimeType ?? 'application/octet-stream', 'name': f.name }),
+  //             'sender': currentUserId,
+  //             'senderRole': currentUserRole,
+  //             'timestamp': DateTime.now().toIso8601String(),
+  //             'classId': widget.classId,
+  //           };
+  //           if (mounted) {
+  //             setState(() {
+  //               messages.add(tempMessage);
+  //               uploadingKeys.add(tempId);
+  //             });
+  //           } else {
+  //             messages.add(tempMessage);
+  //             uploadingKeys.add(tempId);
+  //           }
+  //         } catch (e) {
+  //           print('Error creating local preview: $e');
+  //         }
+
+  //         // 2) Upload directly to S3
+  //         final putRes = await http.put(Uri.parse(uploadUrl), headers: {
+  //           'Content-Type': f.mimeType ?? 'application/octet-stream'
+  //         }, body: bytes);
+
+  //         if (putRes.statusCode != 200 && putRes.statusCode != 204) {
+  //           print('PUT to S3 failed for ${f.name}: ${putRes.statusCode} ${putRes.body}');
+  //           continue;
+  //         }
+
+  //         // 3) Confirm upload
+  //         final confirmRes = await http.post(
+  //           Uri.parse('${URL.chatURL}/classes/confirm-upload'),
+  //           headers: {
+  //             'Authorization': 'Bearer ${widget.authToken}',
+  //             'Content-Type': 'application/json'
+  //           },
+  //           body: json.encode({ 'key': key, 'classId': widget.classId, 'getUrl': getUrl, 'contentType': f.mimeType ?? 'application/octet-stream', 'name': f.name, 'size': bytes.length }),
+  //         );
+
+  //         if (confirmRes.statusCode == 200) {
+  //           print('Upload confirmed for ${f.name}');
+  //           // Try to parse returned message (if server returned it) and replace optimistic message
+  //           try {
+  //             final respBody = json.decode(confirmRes.body);
+  //             // if server returns created message directly
+  //             if (respBody != null && (respBody['_id'] != null || respBody['message'] != null)) {
+  //               Map serverMsg = respBody;
+  //               if (respBody['message'] != null) serverMsg = respBody['message'];
+  //               // replace any optimistic message with same key
+  //               final serverKey = (serverMsg['content'] is String) ? (() { try { return json.decode(serverMsg['content'])['key']; } catch (e) { return null; } })() : (serverMsg['content'] is Map ? serverMsg['content']['key'] : null);
+  //               if (serverKey != null) {
+  //                 final idx = messages.indexWhere((m) {
+  //                   try {
+  //                     final id = m['_id'] as String? ?? '';
+  //                     final pc = m['content'] is String ? json.decode(m['content']) : m['content'];
+  //                     return pc is Map && pc['key'] == serverKey && (id.startsWith('local_') || pc['localPreviewBase64'] != null || pc['localPath'] != null);
+  //                   } catch (e) { return false; }
+  //                 });
+  //                 if (idx >= 0) {
+  //                   setState(() {
+  //                     messages[idx] = serverMsg;
+  //                   });
+  //                 }
+  //               }
+  //             }
+  //           } catch (e) {
+  //             // ignore parse errors
+  //           }
+  //         } else {
+  //           print('Confirm failed for ${f.name}: ${confirmRes.statusCode} ${confirmRes.body}');
+  //         }
+
+  //         // Always clear uploading flag for any local optimistic message that matches this file key
+  //         _clearUploadingForKey(key);
+  //       } catch (e) {
+  //         print('Error uploading file ${f.name}: $e');
+  //       }
+  //     }
+  //   } catch (e) {
+  //     print('Error uploading files: $e');
+  //   }
+  // }
+Future<void> uploadFile() async {
+  if (currentUserId == null) return;
+  try {
+    final XTypeGroup typeGroup = XTypeGroup(
+      label: 'files',
+      extensions: ['jpg', 'jpeg', 'png', 'pdf', 'mp4', 'mov', 'doc', 'docx'],
+    );
+
+    // Allow multiple file selection (max 10)
+    final List<XFile>? files = await openFiles(acceptedTypeGroups: [typeGroup]);
+    if (files == null || files.isEmpty) return;
+
+    final selection = files.take(10).toList();
+
+    // Generate base timestamp for consistent batch naming
+    final baseTimestamp = DateTime.now().millisecondsSinceEpoch;
+
+    // Prepare metadata for presign request with new filenames
+    final filesMeta = <Map<String, String>>[];
+
+    for (int i = 0; i < selection.length; i++) {
+      final f = selection[i];
+      final ext = f.name.split('.').last;
+      final newName = selection.length == 1
+          ? 'file_${baseTimestamp}.$ext'
+          : 'file_${baseTimestamp}_${i + 1}.$ext';
+      filesMeta.add({
+        'fileName': newName,
+        'contentType': f.mimeType ?? 'application/octet-stream',
+      });
+    }
+
+    // 1) Request batch presigned URLs from backend
+    final presignRes = await http.post(
+      Uri.parse('${URL.chatURL}/classes/request-presign'),
+      headers: {
+        'Authorization': 'Bearer ${widget.authToken}',
+        'Content-Type': 'application/json'
+      },
+      body: json.encode({'files': filesMeta, 'classId': widget.classId}),
+    );
+
+    if (presignRes.statusCode != 200) {
+      print('Presign request failed: ${presignRes.statusCode} ${presignRes.body}');
+      return;
+    }
+
+    final presignData = json.decode(presignRes.body);
+    final presignedFiles = presignData['files'] as List<dynamic>? ?? [];
+
+    // Map by new file name
+    final presignMap = {for (var p in presignedFiles) p['fileName']: p};
+
+    // Upload each file with renamed name
+    for (int i = 0; i < selection.length; i++) {
+      final f = selection[i];
+      final ext = f.name.split('.').last;
+      final newName = selection.length == 1
+          ? 'file_${baseTimestamp}.$ext'
+          : 'file_${baseTimestamp}_${i + 1}.$ext';
+
+      try {
+        final bytes = await f.readAsBytes();
+        final pres = presignMap[newName];
+        if (pres == null) {
+          print('No presign returned for $newName');
+          continue;
+        }
+
+        final uploadUrl = pres['uploadUrl'];
+        final getUrl = pres['getUrl'];
+        final key = pres['key'];
+
+        // Insert optimistic local preview message
         try {
-          final bytes = await f.readAsBytes();
-          final pres = presignMap[f.name];
-          if (pres == null) {
-            print('No presign returned for ${f.name}');
-            continue;
-          }
-
-          final uploadUrl = pres['uploadUrl'];
-          final getUrl = pres['getUrl'];
-          final key = pres['key'];
-
-          // Insert optimistic local preview message
-          try {
-            final base64Data = base64Encode(bytes);
-            final tempId = 'local_${DateTime.now().millisecondsSinceEpoch}_${f.name}';
-            final tempMessage = {
-              '_id': tempId,
-              'content': json.encode({ 'type': 'file', 'key': key, 'localPreviewBase64': base64Data, 'mime': f.mimeType ?? 'application/octet-stream', 'name': f.name }),
-              'sender': currentUserId,
-              'senderRole': currentUserRole,
-              'timestamp': DateTime.now().toIso8601String(),
-              'classId': widget.classId,
-            };
-            if (mounted) {
-              setState(() {
-                messages.add(tempMessage);
-                uploadingKeys.add(tempId);
-              });
-            } else {
+          final base64Data = base64Encode(bytes);
+          final tempId = 'local_${DateTime.now().millisecondsSinceEpoch}_$newName';
+          final tempMessage = {
+            '_id': tempId,
+            'content': json.encode({
+              'type': 'file',
+              'key': key,
+              'localPreviewBase64': base64Data,
+              'mime': f.mimeType ?? 'application/octet-stream',
+              'name': newName
+            }),
+            'sender': currentUserId,
+            'senderRole': currentUserRole,
+            'timestamp': DateTime.now().toIso8601String(),
+            'classId': widget.classId,
+          };
+          if (mounted) {
+            setState(() {
               messages.add(tempMessage);
               uploadingKeys.add(tempId);
-            }
-          } catch (e) {
-            print('Error creating local preview: $e');
+            });
+          } else {
+            messages.add(tempMessage);
+            uploadingKeys.add(tempId);
           }
+        } catch (e) {
+          print('Error creating local preview: $e');
+        }
 
-          // 2) Upload directly to S3
-          final putRes = await http.put(Uri.parse(uploadUrl), headers: {
-            'Content-Type': f.mimeType ?? 'application/octet-stream'
-          }, body: bytes);
+        // 2) Upload directly to S3
+        final putRes = await http.put(
+          Uri.parse(uploadUrl),
+          headers: {'Content-Type': f.mimeType ?? 'application/octet-stream'},
+          body: bytes,
+        );
 
-          if (putRes.statusCode != 200 && putRes.statusCode != 204) {
-            print('PUT to S3 failed for ${f.name}: ${putRes.statusCode} ${putRes.body}');
-            continue;
-          }
+        if (putRes.statusCode != 200 && putRes.statusCode != 204) {
+          print('PUT to S3 failed for $newName: ${putRes.statusCode} ${putRes.body}');
+          continue;
+        }
 
-          // 3) Confirm upload
-          final confirmRes = await http.post(
-            Uri.parse('${URL.chatURL}/classes/confirm-upload'),
-            headers: {
-              'Authorization': 'Bearer ${widget.authToken}',
-              'Content-Type': 'application/json'
-            },
-            body: json.encode({ 'key': key, 'classId': widget.classId, 'getUrl': getUrl, 'contentType': f.mimeType ?? 'application/octet-stream', 'name': f.name, 'size': bytes.length }),
-          );
+        // 3) Confirm upload
+        final confirmRes = await http.post(
+          Uri.parse('${URL.chatURL}/classes/confirm-upload'),
+          headers: {
+            'Authorization': 'Bearer ${widget.authToken}',
+            'Content-Type': 'application/json'
+          },
+          body: json.encode({
+            'key': key,
+            'classId': widget.classId,
+            'getUrl': getUrl,
+            'contentType': f.mimeType ?? 'application/octet-stream',
+            'name': newName,
+            'size': bytes.length
+          }),
+        );
 
-          if (confirmRes.statusCode == 200) {
-            print('Upload confirmed for ${f.name}');
-            // Try to parse returned message (if server returned it) and replace optimistic message
-            try {
-              final respBody = json.decode(confirmRes.body);
-              // if server returns created message directly
-              if (respBody != null && (respBody['_id'] != null || respBody['message'] != null)) {
-                Map serverMsg = respBody;
-                if (respBody['message'] != null) serverMsg = respBody['message'];
-                // replace any optimistic message with same key
-                final serverKey = (serverMsg['content'] is String) ? (() { try { return json.decode(serverMsg['content'])['key']; } catch (e) { return null; } })() : (serverMsg['content'] is Map ? serverMsg['content']['key'] : null);
-                if (serverKey != null) {
-                  final idx = messages.indexWhere((m) {
-                    try {
-                      final id = m['_id'] as String? ?? '';
-                      final pc = m['content'] is String ? json.decode(m['content']) : m['content'];
-                      return pc is Map && pc['key'] == serverKey && (id.startsWith('local_') || pc['localPreviewBase64'] != null || pc['localPath'] != null);
-                    } catch (e) { return false; }
-                  });
-                  if (idx >= 0) {
-                    setState(() {
-                      messages[idx] = serverMsg;
-                    });
+        if (confirmRes.statusCode == 200) {
+          print('Upload confirmed for $newName');
+
+          // Try to replace optimistic message with server message
+          try {
+            final respBody = json.decode(confirmRes.body);
+            if (respBody != null && (respBody['_id'] != null || respBody['message'] != null)) {
+              Map serverMsg = respBody;
+              if (respBody['message'] != null) serverMsg = respBody['message'];
+
+              final serverKey = (serverMsg['content'] is String)
+                  ? (() {
+                      try {
+                        return json.decode(serverMsg['content'])['key'];
+                      } catch (e) {
+                        return null;
+                      }
+                    })()
+                  : (serverMsg['content'] is Map
+                      ? serverMsg['content']['key']
+                      : null);
+
+              if (serverKey != null) {
+                final idx = messages.indexWhere((m) {
+                  try {
+                    final id = m['_id'] as String? ?? '';
+                    final pc =
+                        m['content'] is String ? json.decode(m['content']) : m['content'];
+                    return pc is Map &&
+                        pc['key'] == serverKey &&
+                        (id.startsWith('local_') ||
+                            pc['localPreviewBase64'] != null ||
+                            pc['localPath'] != null);
+                  } catch (e) {
+                    return false;
                   }
+                });
+                if (idx >= 0) {
+                  setState(() {
+                    messages[idx] = serverMsg;
+                  });
                 }
               }
-            } catch (e) {
-              // ignore parse errors
             }
-          } else {
-            print('Confirm failed for ${f.name}: ${confirmRes.statusCode} ${confirmRes.body}');
+          } catch (e) {
+            // ignore parse errors
           }
-
-          // Always clear uploading flag for any local optimistic message that matches this file key
-          _clearUploadingForKey(key);
-        } catch (e) {
-          print('Error uploading file ${f.name}: $e');
+        } else {
+          print('Confirm failed for $newName: ${confirmRes.statusCode} ${confirmRes.body}');
         }
+
+        // Always clear uploading flag
+        _clearUploadingForKey(key);
+      } catch (e) {
+        print('Error uploading file ${f.name}: $e');
       }
-    } catch (e) {
-      print('Error uploading files: $e');
     }
+  } catch (e) {
+    print('Error uploading files: $e');
   }
+}
 
 
 Widget _buildFilePreview(Map parsed, String messageId) {
-  final String url = parsed['url'] ?? '';
-  final String name = parsed['name'] ?? '';
-  final String mime = parsed['mime'] ?? '';
-  final String? base64Preview = parsed['localPreviewBase64'];
+    final String url = parsed['url'] ?? '';
+    final String name = parsed['name'] ?? '';
+    final String mime = parsed['mime'] ?? '';
+    final String? base64Preview = parsed['localPreviewBase64'];
 
-  final bool isImage = mime.startsWith('image/');
-  final bool isVideo = mime.startsWith('video/');
-  final bool isPDF = mime.startsWith('application/pdf');
+    final bool isImage = mime.startsWith('image/');
+    final bool isVideo = mime.startsWith('video/');
+    final bool isPDF = mime.startsWith('application/pdf');
 
-  final preview = Container(
-    constraints:
-        BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.72),
-    decoration: BoxDecoration(
-      color: Colors.grey.shade200,
-      borderRadius: BorderRadius.circular(12),
-    ),
-    child: ClipRRect(
-      borderRadius: BorderRadius.circular(12),
-      child: isImage
-          ? (base64Preview != null
-              ? SizedBox(
-                  height: 160,
-                  child: Image.memory(base64Decode(base64Preview),
-                      fit: BoxFit.cover))
-              : (url.isEmpty
-                  ? Container(
-                      height: 160,
-                      color: Colors.black12,
-                      child: Center(child: Icon(Icons.broken_image)))
-                  : SizedBox(
-                      height: 160,
-                      child: Image.network(
-                        url,
-                        fit: BoxFit.cover,
-                        loadingBuilder: (ctx, child, progress) {
-                          if (progress == null) return child;
-                          return Container(
-                              height: 160,
-                              child:
-                                  Center(child: CircularProgressIndicator()));
-                        },
-                        errorBuilder: (ctx, error, stack) {
-                          Future.microtask(() {
-                            try {
-                              _ensureUrlForParsed(parsed, messageId,
-                                  force: true);
-                            } catch (e) {}
-                          });
-                          if (base64Preview != null) {
+    final preview = Container(
+      constraints:
+          BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.72),
+      decoration: BoxDecoration(
+        color: Colors.grey.shade200,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(12),
+        child: isImage
+            ? (base64Preview != null
+                ? SizedBox(
+                    height: 160,
+                    child: Image.memory(base64Decode(base64Preview),
+                        fit: BoxFit.cover))
+                : (url.isEmpty
+                    ? Container(
+                        height: 160,
+                        color: Colors.black12,
+                        child: Center(child: Icon(Icons.broken_image)))
+                    : SizedBox(
+                        height: 160,
+                        child: Image.network(
+                          url,
+                          fit: BoxFit.cover,
+                          loadingBuilder: (ctx, child, progress) {
+                            if (progress == null) return child;
                             return SizedBox(
                                 height: 160,
-                                child: Image.memory(
-                                    base64Decode(base64Preview),
-                                    fit: BoxFit.cover));
-                          }
-                          return Container(
-                              height: 160,
-                              color: Colors.black12,
-                              child: Center(child: Icon(Icons.broken_image)));
-                        },
+                                child:
+                                    Center(child: CircularProgressIndicator()));
+                          },
+                          errorBuilder: (ctx, error, stack) {
+                            Future.microtask(() {
+                              try {
+                                _ensureUrlForParsed(parsed, messageId,
+                                    force: true);
+                              } catch (e) {}
+                            });
+                            if (base64Preview != null) {
+                              return SizedBox(
+                                  height: 160,
+                                  child: Image.memory(
+                                      base64Decode(base64Preview),
+                                      fit: BoxFit.cover));
+                            }
+                            return Container(
+                                height: 160,
+                                color: Colors.black12,
+                                child: Center(child: Icon(Icons.broken_image)));
+                          },
+                        ),
+                      )))
+            : Container(
+                height: 140,
+                padding: EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 96,
+                      height: 96,
+                      color: Colors.black12,
+                      child: Center(
+                        child: Icon(
+                            isVideo ? Icons.videocam : Icons.picture_as_pdf,
+                            size: 40),
                       ),
-                    )))
-          : Container(
-              height: 140,
-              padding: EdgeInsets.all(12),
-              child: Row(
-                children: [
-                  Container(
-                    width: 96,
-                    height: 96,
-                    color: Colors.black12,
-                    child: Center(
-                      child: Icon(
-                          isVideo ? Icons.videocam : Icons.picture_as_pdf,
-                          size: 40),
                     ),
-                  ),
-                  SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(name,
-                            style: TextStyle(fontWeight: FontWeight.bold)),
-                        SizedBox(height: 6),
-                        Text(mime,
-                            style: TextStyle(
-                                color: Colors.black54, fontSize: 12)),
-                      ],
-                    ),
-                  )
-                ],
+                    SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(name,
+                              style: TextStyle(fontWeight: FontWeight.bold)),
+                          SizedBox(height: 6),
+                          Text(mime,
+                              style: TextStyle(
+                                  color: Colors.black54, fontSize: 12)),
+                        ],
+                      ),
+                    )
+                  ],
+                ),
               ),
-            ),
-    ),
-  );
+      ),
+    );
 
-  // Wrap in GestureDetector to open fullscreen on tap
-  return GestureDetector(
-    onTap: () async {
-      if (isVideo) {
+    // Wrap in GestureDetector to open fullscreen on tap
+    return GestureDetector(
+      onTap: () async {
+        if (isVideo) {
+          // On tap: download if missing, then open player
+          final path = await FileUtils.downloadFile(url, name);
+
           Navigator.of(context).push(MaterialPageRoute(
             builder: (_) => VideoPlayerScreen(
-              videoUrl: url,
-              isLocal: false,
+              videoUrl: path, // local path now
+              isLocal: true,
             ),
           ));
-        } else if (isImage) {
-          // Handle full-screen image preview (existing logic)
+        }
+        //  else if (isImage) {
+        //   // Handle full-screen image preview (existing logic)
+        //   final media = _getMediaMessages();
+        //   final idx = media.indexWhere((m) => (m['url'] ?? '') == url);
+        //   final start = idx >= 0 ? idx : 0;
+        //   Navigator.of(context).push(MaterialPageRoute(
+        //     builder: (_) =>
+        //         FullScreenMedia(initialIndex: start, mediaList: media),
+        //   ));
+        // } 
+        else if (isImage) {
+          // Download if missing, then open fullscreen image
+          final path = await FileUtils.downloadFile(url, name);
           final media = _getMediaMessages();
           final idx = media.indexWhere((m) => (m['url'] ?? '') == url);
           final start = idx >= 0 ? idx : 0;
+
+          // Pass localPath to FullScreenMedia if you update it to handle local files
           Navigator.of(context).push(MaterialPageRoute(
             builder: (_) =>
                 FullScreenMedia(initialIndex: start, mediaList: media),
@@ -550,17 +761,18 @@ Widget _buildFilePreview(Map parsed, String messageId) {
           ));
         }
       },
-    child: isVideo
-        ? Stack(
-            alignment: Alignment.center,
-            children: [
-              preview,
-              Icon(Icons.play_circle_outline, size: 56, color: Colors.white70),
-            ],
-          )
-        : preview,
-  );
-}
+      child: isVideo
+          ? Stack(
+              alignment: Alignment.center,
+              children: [
+                preview,
+                Icon(Icons.play_circle_outline,
+                    size: 56, color: Colors.white70),
+              ],
+            )
+          : preview,
+    );
+  }
 
   Future<void> _ensureUrlForParsed(Map parsed, String messageId, {bool force = false}) async {
     try {
