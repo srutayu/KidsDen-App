@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:frontend/screens/chat/fullScreenMedia.dart';
+import 'package:frontend/screens/chat/fullscreen_media.dart';
 
 class MediaGalleryScreen extends StatelessWidget {
   final List<Map> mediaList;
