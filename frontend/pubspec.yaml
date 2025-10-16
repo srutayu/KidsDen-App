@@ -57,6 +57,8 @@ dependencies:
     sdk: flutter
   shimmer: ^3.0.0
   dropdown_button2: ^2.3.9
+  video_player: ^2.10.0
+  chewie: ^1.13.0
 
 
 

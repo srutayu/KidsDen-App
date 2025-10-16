@@ -1,17 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:frontend/constants/url.dart';
 import 'package:frontend/provider/user_data_provider.dart';
+import 'package:frontend/screens/chat/fullscreenMedia.dart';
+import 'package:frontend/screens/chat/mediaGallery.dart';
+import 'package:frontend/screens/chat/videoPlayer.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:file_selector/file_selector.dart';
-import 'package:url_launcher/url_launcher.dart';
-import 'dart:io';
-import 'package:flutter/services.dart';
-import 'package:permission_handler/permission_handler.dart';
-import 'package:path_provider/path_provider.dart';
 
 class ChatScreen extends StatefulWidget {
   final String authToken;
@@ -22,248 +20,6 @@ class ChatScreen extends StatefulWidget {
 
   @override
   _ChatScreenState createState() => _ChatScreenState();
-}
-
-
-// Screen to show media thumbnails and open full-screen viewer
-class MediaGalleryScreen extends StatelessWidget {
-  final List<Map> mediaList;
-
-  MediaGalleryScreen({required this.mediaList});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text('Shared media')),
-      body: mediaList.isEmpty
-          ? Center(child: Text('No media shared yet'))
-          : GridView.builder(
-              padding: const EdgeInsets.all(8),
-              gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                crossAxisSpacing: 4,
-                mainAxisSpacing: 4,
-              ),
-              itemCount: mediaList.length,
-              itemBuilder: (ctx, i) {
-                final item = mediaList[i];
-                final mime = item['mime'] as String? ?? '';
-                final url = item['url'] as String? ?? '';
-
-                return GestureDetector(
-                  onTap: () {
-                    Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => FullScreenMedia(initialIndex: i, mediaList: mediaList),
-                    ));
-                  },
-                  child: Container(
-                    color: Colors.black12,
-                    child: mime.startsWith('image/')
-                        ? Image.network(url, fit: BoxFit.cover)
-                        : Stack(
-                            children: [
-                              Positioned.fill(
-                                child: Container(color: Colors.black12),
-                              ),
-                              Center(
-                                child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Icon(mime.startsWith('video/') ? Icons.videocam : Icons.insert_drive_file, size: 36),
-                                    SizedBox(height: 6),
-                                    Text(item['name'] ?? '', overflow: TextOverflow.ellipsis, style: TextStyle(fontSize: 12)),
-                                  ],
-                                ),
-                              )
-                            ],
-                          ),
-                  ),
-                );
-              },
-            ),
-    );
-  }
-}
-
-
-class FullScreenMedia extends StatefulWidget {
-  final int initialIndex;
-  final List<Map> mediaList;
-
-  FullScreenMedia({required this.initialIndex, required this.mediaList});
-
-  @override
-  _FullScreenMediaState createState() => _FullScreenMediaState();
-}
-
-class _FullScreenMediaState extends State<FullScreenMedia> {
-  late PageController _pageController;
-  late int _currentIndex;
-  static final _platform = MethodChannel('kidsden/app_info');
-
-  @override
-  void initState() {
-    super.initState();
-    _currentIndex = widget.initialIndex;
-    _pageController = PageController(initialPage: _currentIndex);
-  }
-
-  Future<int?> _getAndroidSdkInt() async {
-    try {
-      final val = await _platform.invokeMethod<int>('getSdkInt');
-      return val;
-    } catch (e) {
-      return null;
-    }
-  }
-
-  /// Ensure appropriate storage/media permission for downloading the given item.
-  /// Returns true if permission is granted or not needed, false if denied.
-  Future<bool> _ensureStoragePermission(Map item) async {
-    if (!Platform.isAndroid) return true;
-
-    final sdkInt = (await _getAndroidSdkInt()) ?? 0;
-    try {
-      if (sdkInt >= 33) {
-        final mime = item['mime'] as String? ?? '';
-        Permission perm = mime.startsWith('image/') ? Permission.photos : mime.startsWith('video/') ? Permission.videos : Permission.storage;
-        final status = await perm.status;
-        if (!status.isGranted) {
-          final res = await perm.request();
-          if (!res.isGranted) {
-            if (res.isPermanentlyDenied) await openAppSettings();
-            return false;
-          }
-        }
-      } else if (sdkInt >= 30) {
-        final manageStatus = await Permission.manageExternalStorage.status;
-        if (!manageStatus.isGranted) {
-          final res = await Permission.manageExternalStorage.request();
-          if (!res.isGranted) {
-            if (res.isPermanentlyDenied) await openAppSettings();
-            return false;
-          }
-        }
-      } else {
-        final status = await Permission.storage.status;
-        if (!status.isGranted) {
-          final res = await Permission.storage.request();
-          if (!res.isGranted) {
-            if (res.isPermanentlyDenied) await openAppSettings();
-            return false;
-          }
-        }
-      }
-    } catch (e) {
-      print('Error ensuring storage permission: $e');
-      return true;
-    }
-
-    return true;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.mediaList[_currentIndex]['name'] ?? ''),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.download),
-            tooltip: 'Download',
-            onPressed: () async {
-              await _saveCurrentMedia();
-            },
-          )
-        ],
-      ),
-      body: PageView.builder(
-        controller: _pageController,
-        itemCount: widget.mediaList.length,
-        onPageChanged: (idx) => setState(() => _currentIndex = idx),
-        itemBuilder: (ctx, idx) {
-          final item = widget.mediaList[idx];
-          final mime = item['mime'] as String? ?? '';
-          final url = item['url'] as String? ?? '';
-
-          if (mime.startsWith('image/')) {
-            return InteractiveViewer(
-              child: Center(child: Image.network(url, fit: BoxFit.contain)),
-            );
-          }
-
-          // For videos and pdfs, we'll show a placeholder with open action
-          return Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(mime.startsWith('video/') ? Icons.videocam : Icons.insert_drive_file, size: 80),
-                SizedBox(height: 12),
-                Text(item['name'] ?? ''),
-                SizedBox(height: 12),
-                ElevatedButton.icon(
-                  icon: Icon(Icons.open_in_new),
-                  label: Text('Open'),
-                  onPressed: () async {
-                    final uri = Uri.parse(url);
-                    if (await canLaunchUrl(uri)) {
-                      await launchUrl(uri, mode: LaunchMode.externalApplication);
-                    }
-                  },
-                )
-              ],
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  Future<void> _saveCurrentMedia() async {
-    final item = widget.mediaList[_currentIndex];
-    final url = item['url'] as String? ?? '';
-    final name = item['name'] as String? ?? 'downloaded_file';
-
-    if (url.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No URL to download')));
-      return;
-    }
-
-    try {
-      // Ensure storage permission is granted before attempting download
-      final ok = await _ensureStoragePermission(item);
-      if (!ok) return;
-
-      final resp = await http.get(Uri.parse(url));
-      if (resp.statusCode != 200) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to download: ${resp.statusCode}')));
-        return;
-      }
-
-      final bytes = resp.bodyBytes;
-
-      Directory baseDir;
-      if (Platform.isAndroid) {
-        // App-specific external directory is best for compatibility
-        baseDir = (await getExternalStorageDirectory())!;
-      } else {
-        baseDir = await getApplicationDocumentsDirectory();
-      }
-
-      final saveDir = Directory('${baseDir.path}/KidsDen');
-      if (!await saveDir.exists()) await saveDir.create(recursive: true);
-
-      // sanitize name
-      final safeName = name.replaceAll(RegExp(r"[^0-9A-Za-z. _-]"), '_');
-      final file = File('${saveDir.path}/$safeName');
-      await file.writeAsBytes(bytes);
-
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Saved to ${file.path}')));
-    } catch (e) {
-      print('Error saving file: $e');
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error saving file')));
-    }
-  }
 }
 
 class _ChatScreenState extends State<ChatScreen> {
@@ -653,113 +409,271 @@ class _ChatScreenState extends State<ChatScreen> {
 
   
 
-  Widget _buildFilePreview(Map parsed, String messageId) {
-    final String url = parsed['url'] ?? '';
-    final String name = parsed['name'] ?? '';
-    final String mime = parsed['mime'] ?? '';
-    final String? base64Preview = parsed['localPreviewBase64'];
+  // Widget _buildFilePreview(Map parsed, String messageId) {
+  //   final String url = parsed['url'] ?? '';
+  //   final String name = parsed['name'] ?? '';
+  //   final String mime = parsed['mime'] ?? '';
+  //   final String? base64Preview = parsed['localPreviewBase64'];
 
-    final bool isImage = mime.startsWith('image/');
-    final bool isVideo = mime.startsWith('video/');
+  //   final bool isImage = mime.startsWith('image/');
+  //   final bool isVideo = mime.startsWith('video/');
+
+  //   final preview = Container(
+  //     constraints:
+  //         BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.72),
+  //     decoration: BoxDecoration(
+  //       color: Colors.grey.shade200,
+  //       borderRadius: BorderRadius.circular(12),
+  //     ),
+  //     child: ClipRRect(
+  //       borderRadius: BorderRadius.circular(12),
+  //       child: isImage
+  //           ? (base64Preview != null
+  //               ? SizedBox(
+  //                   height: 160,
+  //                   child: Image.memory(base64Decode(base64Preview),
+  //                       fit: BoxFit.cover))
+  //               : (url.isEmpty
+  //                   ? Container(
+  //                       height: 160,
+  //                       color: Colors.black12,
+  //                       child: Center(child: Icon(Icons.broken_image)))
+  //                   : SizedBox(
+  //                       height: 160,
+  //                       child: Image.network(
+  //                         url,
+  //                         fit: BoxFit.cover,
+  //                         loadingBuilder: (ctx, child, progress) {
+  //                           if (progress == null) return child;
+  //                           return Container(
+  //                               height: 160,
+  //                               child:
+  //                                   Center(child: CircularProgressIndicator()));
+  //                         },
+  //                         errorBuilder: (ctx, error, stack) {
+  //                           // If network image fails (403 or other), request a fresh presigned GET and keep showing base64 preview or a placeholder.
+  //                           // Use a microtask so we don't call setState synchronously during build.
+  //                           Future.microtask(() {
+  //                             try {
+  //                               _ensureUrlForParsed(parsed, messageId,
+  //                                   force: true);
+  //                             } catch (e) {
+  //                               // ignore
+  //                             }
+  //                           });
+
+  //                           if (base64Preview != null) {
+  //                             return SizedBox(
+  //                                 height: 160,
+  //                                 child: Image.memory(
+  //                                     base64Decode(base64Preview),
+  //                                     fit: BoxFit.cover));
+  //                           }
+  //                           return Container(
+  //                               height: 160,
+  //                               color: Colors.black12,
+  //                               child: Center(child: Icon(Icons.broken_image)));
+  //                         },
+  //                       ),
+  //                     )))
+  //           : Container(
+  //               height: 140,
+  //               padding: EdgeInsets.all(12),
+  //               child: Row(
+  //                 children: [
+  //                   Container(
+  //                     width: 96,
+  //                     height: 96,
+  //                     color: Colors.black12,
+  //                     child: Center(
+  //                       child: Icon(
+  //                           isVideo ? Icons.videocam : Icons.picture_as_pdf,
+  //                           size: 40),
+  //                     ),
+  //                   ),
+  //                   SizedBox(width: 12),
+  //                   Expanded(
+  //                     child: Column(
+  //                       mainAxisAlignment: MainAxisAlignment.center,
+  //                       crossAxisAlignment: CrossAxisAlignment.start,
+  //                       children: [
+  //                         Text(name,
+  //                             style: TextStyle(fontWeight: FontWeight.bold)),
+  //                         SizedBox(height: 6),
+  //                         Text(mime,
+  //                             style: TextStyle(
+  //                                 color: Colors.black54, fontSize: 12)),
+  //                       ],
+  //                     ),
+  //                   )
+  //                 ],
+  //               ),
+  //             ),
+  //     ),
+  //   );
+
+  //   // If there is no URL but we have a key and backend supports presigned GET, fetch it once
+  //   if (url.isEmpty &&
+  //       (parsed['key'] != null) &&
+  //       parsed['_presignRequested'] != true) {
+  //     _ensureUrlForParsed(parsed, messageId);
+  //   }
+
+  //   // Open the built-in full screen viewer for all media types so user can preview and download
+  //   return GestureDetector(
+  //     onTap: () {
+  //       final media = _getMediaMessages();
+  //       // try to find index of this url in media list
+  //       final idx = media.indexWhere((m) => (m['url'] ?? '') == url);
+  //       final start = idx >= 0 ? idx : 0;
+  //       Navigator.of(context).push(MaterialPageRoute(
+  //         builder: (_) => FullScreenMedia(initialIndex: start, mediaList: media),
+  //       ));
+  //     },
+  //   child: isVideo
+  //         ? Stack(
+  //             alignment: Alignment.center,
+  //             children: [
+  //               preview,
+  //               Icon(Icons.play_circle_outline, size: 56, color: Colors.white70),
+  //             ],
+  //           )
+  //         : preview,
+  //   );
+  // }
+Widget _buildFilePreview(Map parsed, String messageId) {
+  final String url = parsed['url'] ?? '';
+  final String name = parsed['name'] ?? '';
+  final String mime = parsed['mime'] ?? '';
+  final String? base64Preview = parsed['localPreviewBase64'];
+
+  final bool isImage = mime.startsWith('image/');
+  final bool isVideo = mime.startsWith('video/');
 
   final preview = Container(
-      constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.72),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade200,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: isImage
-            ? (base64Preview != null
-                ? SizedBox(height: 160, child: Image.memory(base64Decode(base64Preview), fit: BoxFit.cover))
-                : (url.isEmpty
-                    ? Container(height: 160, color: Colors.black12, child: Center(child: Icon(Icons.broken_image)))
-                    : SizedBox(
-                        height: 160,
-                        child: Image.network(
-                          url,
-                          fit: BoxFit.cover,
-                          loadingBuilder: (ctx, child, progress) {
-                            if (progress == null) return child;
-                            return Container(height: 160, child: Center(child: CircularProgressIndicator()));
-                          },
-                          errorBuilder: (ctx, error, stack) {
-                            // If network image fails (403 or other), request a fresh presigned GET and keep showing base64 preview or a placeholder.
-                            // Use a microtask so we don't call setState synchronously during build.
-                            Future.microtask(() {
-                              try {
-                                _ensureUrlForParsed(parsed, messageId, force: true);
-                              } catch (e) {
-                                // ignore
-                              }
-                            });
-
-                            if (base64Preview != null) {
-                              return SizedBox(height: 160, child: Image.memory(base64Decode(base64Preview), fit: BoxFit.cover));
-                            }
-                            return Container(height: 160, color: Colors.black12, child: Center(child: Icon(Icons.broken_image)));
-                          },
-                        ),
-                      )) )
-            : Container(
-                height: 140,
-                padding: EdgeInsets.all(12),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 96,
-                      height: 96,
+    constraints:
+        BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.72),
+    decoration: BoxDecoration(
+      color: Colors.grey.shade200,
+      borderRadius: BorderRadius.circular(12),
+    ),
+    child: ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: isImage
+          ? (base64Preview != null
+              ? SizedBox(
+                  height: 160,
+                  child: Image.memory(base64Decode(base64Preview),
+                      fit: BoxFit.cover))
+              : (url.isEmpty
+                  ? Container(
+                      height: 160,
                       color: Colors.black12,
-                      child: Center(
-                        child: Icon(isVideo ? Icons.videocam : Icons.picture_as_pdf, size: 40),
+                      child: Center(child: Icon(Icons.broken_image)))
+                  : SizedBox(
+                      height: 160,
+                      child: Image.network(
+                        url,
+                        fit: BoxFit.cover,
+                        loadingBuilder: (ctx, child, progress) {
+                          if (progress == null) return child;
+                          return Container(
+                              height: 160,
+                              child:
+                                  Center(child: CircularProgressIndicator()));
+                        },
+                        errorBuilder: (ctx, error, stack) {
+                          Future.microtask(() {
+                            try {
+                              _ensureUrlForParsed(parsed, messageId,
+                                  force: true);
+                            } catch (e) {}
+                          });
+                          if (base64Preview != null) {
+                            return SizedBox(
+                                height: 160,
+                                child: Image.memory(
+                                    base64Decode(base64Preview),
+                                    fit: BoxFit.cover));
+                          }
+                          return Container(
+                              height: 160,
+                              color: Colors.black12,
+                              child: Center(child: Icon(Icons.broken_image)));
+                        },
                       ),
+                    )))
+          : Container(
+              height: 140,
+              padding: EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  Container(
+                    width: 96,
+                    height: 96,
+                    color: Colors.black12,
+                    child: Center(
+                      child: Icon(
+                          isVideo ? Icons.videocam : Icons.picture_as_pdf,
+                          size: 40),
                     ),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(name, style: TextStyle(fontWeight: FontWeight.bold)),
-                          SizedBox(height: 6),
-                          Text(mime, style: TextStyle(color: Colors.black54, fontSize: 12)),
-                        ],
-                      ),
-                    )
-                  ],
-                ),
+                  ),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(name,
+                            style: TextStyle(fontWeight: FontWeight.bold)),
+                        SizedBox(height: 6),
+                        Text(mime,
+                            style: TextStyle(
+                                color: Colors.black54, fontSize: 12)),
+                      ],
+                    ),
+                  )
+                ],
               ),
-      ),
-    );
+            ),
+    ),
+  );
 
-    // If there is no URL but we have a key and backend supports presigned GET, fetch it once
-    if (url.isEmpty && (parsed['key'] != null) && parsed['_presignRequested'] != true) {
-      _ensureUrlForParsed(parsed, messageId);
-    }
+  // Wrap in GestureDetector to open fullscreen on tap
+  return GestureDetector(
+    onTap: () async {
+      if (isVideo) {
+        // Open VideoPlayerScreen for videos
+        // final path = await FileUtils.getLocalPath(name);
+        // final isLocal = await FileUtils.fileExists(name);
 
-    // Open the built-in full screen viewer for all media types so user can preview and download
-    return GestureDetector(
-      onTap: () {
+        Navigator.of(context).push(MaterialPageRoute(
+          builder: (_) => VideoPlayerScreen(
+            videoUrl:  url,
+            isLocal: false,
+          ),
+        ));
+      } else if (isImage) {
+        // Handle full-screen image preview (existing logic)
         final media = _getMediaMessages();
-        // try to find index of this url in media list
         final idx = media.indexWhere((m) => (m['url'] ?? '') == url);
         final start = idx >= 0 ? idx : 0;
         Navigator.of(context).push(MaterialPageRoute(
           builder: (_) => FullScreenMedia(initialIndex: start, mediaList: media),
         ));
-      },
+      }
+    },
     child: isVideo
-          ? Stack(
-              alignment: Alignment.center,
-              children: [
-                preview,
-                Icon(Icons.play_circle_outline, size: 56, color: Colors.white70),
-              ],
-            )
-          : preview,
-    );
-  }
+        ? Stack(
+            alignment: Alignment.center,
+            children: [
+              preview,
+              Icon(Icons.play_circle_outline, size: 56, color: Colors.white70),
+            ],
+          )
+        : preview,
+  );
+}
 
   Future<void> _ensureUrlForParsed(Map parsed, String messageId, {bool force = false}) async {
     try {
