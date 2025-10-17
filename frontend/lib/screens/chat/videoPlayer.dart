@@ -10,7 +10,7 @@ class VideoPlayerScreen extends StatefulWidget {
   const VideoPlayerScreen({
     Key? key,
     required this.videoUrl,
-    this.isLocal = false,
+    required this.isLocal,
   }) : super(key: key);
 
   @override

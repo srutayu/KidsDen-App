@@ -1,34 +1,41 @@
 import 'dart:io';
-import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
+import 'package:http/http.dart' as http;
 
 class FileUtils {
-  // Returns the local path for a file
-  static Future<String> getLocalPath(String filename) async {
-    final dir = await getApplicationDocumentsDirectory();
-    return '${dir.path}/$filename';
-  }
-
-  // Checks if file exists locally
-  static Future<bool> fileExists(String filename) async {
-    final path = await getLocalPath(filename);
-    return File(path).exists();
-  }
-
-  // Downloads a file from URL if not exists locally
-  static Future<String> downloadFile(String url, String filename) async {
-    final path = await getLocalPath(filename);
-    final file = File(path);
-
-    if (!await file.exists()) {
-      final resp = await http.get(Uri.parse(url));
-      if (resp.statusCode == 200) {
-        await file.writeAsBytes(resp.bodyBytes);
-      } else {
-        throw Exception('Failed to download file: ${resp.statusCode}');
-      }
+  static Future<String> getLocalPath() async {
+  if (Platform.isAndroid) {
+    // Use a public directory visible in gallery
+    final publicPath = '/storage/emulated/0/Pictures/KidsDen';
+    final directory = Directory(publicPath);
+    if (!await directory.exists()) {
+      await directory.create(recursive: true);
     }
+    return publicPath;
+  } else {
+    final dir = await getApplicationDocumentsDirectory();
+    return dir.path;
+  }
+}
 
-    return path;
+  static Future<String> getLocalFilePath(String fileName) async {
+    final dirPath = await getLocalPath();
+    return '$dirPath/$fileName';
+  }
+
+  static Future<bool> fileExists(String fileName) async {
+    final file = File(await getLocalFilePath(fileName));
+    return file.exists();
+  }
+
+  static Future<String> downloadFile(String url, String fileName) async {
+    final response = await http.get(Uri.parse(url));
+    if (response.statusCode == 200) {
+      final file = File(await getLocalFilePath(fileName));
+      await file.writeAsBytes(response.bodyBytes);
+      return file.path;
+    } else {
+      throw Exception('Failed to download file');
+    }
   }
 }
