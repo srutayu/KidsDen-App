@@ -14,7 +14,6 @@ import 'package:provider/provider.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:file_selector/file_selector.dart';
 
 class ChatScreen extends StatefulWidget {
   final String authToken;
