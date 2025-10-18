@@ -368,7 +368,7 @@ Future<void> uploadFile() async {
                                     Center(child: CircularProgressIndicator()));
                           }
                           return Image.file(File(snap.data!),
-                              fit: BoxFit.cover);
+                              fit: BoxFit.cover, cacheWidth: 200,);
                         },
                       )
                     : (url.isEmpty
@@ -464,20 +464,25 @@ Future<void> uploadFile() async {
               final path = exists
                   ? await FileUtils.getLocalFilePath(name)
                   : await FileUtils.downloadFile(url, name);
-
-              Navigator.of(context).push(MaterialPageRoute(
-                builder: (_) =>
-                    VideoPlayerScreen(videoUrl: path, isLocal: true),
-              ));
+              if (context.mounted) {
+                Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) =>
+                      VideoPlayerScreen(videoUrl: path, isLocal: true),
+                ));
+              }
+              
             } else if (isImage) {
               final path = exists
                   ? await FileUtils.getLocalFilePath(name)
                   : await FileUtils.downloadFile(url, name);
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => LocalImageViewer(filePath: path),
-                ),
-              );
+              if (context.mounted) {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => LocalImageViewer(filePath: path),
+                  ),
+                );
+              }
+              
             } else if (isPDF) {
               final path = exists
                   ? await FileUtils.getLocalFilePath(name)
@@ -825,7 +830,7 @@ Future<void> uploadFile() async {
 
     try {
       final res = await http.delete(
-          Uri.parse('${URL.chatURL}/classes/delete-message/${idKey}'),
+          Uri.parse('${URL.chatURL}/classes/delete-message/$idKey'),
           headers: {'Authorization': 'Bearer ${widget.authToken}'});
       if (res.statusCode == 200) {
         if (!mounted) return;
