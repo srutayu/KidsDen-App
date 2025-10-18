@@ -35,6 +35,7 @@ class MyApp extends StatelessWidget {
           seedColor: const Color.fromARGB(255, 82, 172, 163),
           brightness: Brightness.light,
         ),
+        scaffoldBackgroundColor: const Color.fromARGB(255, 195, 244, 205),
         useMaterial3: true,
       ),
       darkTheme: ThemeData(
@@ -42,6 +43,7 @@ class MyApp extends StatelessWidget {
           seedColor: const Color.fromARGB(255, 82, 172, 163),
           brightness: Brightness.dark,
         ),
+        scaffoldBackgroundColor: const Color.fromARGB(255, 46, 87, 72),
         useMaterial3: true,
       ),
       themeMode:
