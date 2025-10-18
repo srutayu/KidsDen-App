@@ -651,8 +651,9 @@ Future<void> uploadFile() async {
     // Defensive: if message content is missing or empty, don't render a bubble
     final rawContent = msg['content'];
     if (rawContent == null) return SizedBox.shrink();
-    if (rawContent is String && rawContent.trim().isEmpty)
+    if (rawContent is String && rawContent.trim().isEmpty) {
       return SizedBox.shrink();
+    }
 
     final senderName = userNamesCache[senderId] ?? '?';
     final initials = getInitials(senderName);
@@ -726,7 +727,10 @@ Future<void> uploadFile() async {
                     // fallback: plain text
                     return Text(
                       parsed is String ? parsed : (parsed?.toString() ?? ' '),
-                      style: const TextStyle(fontSize: 16),
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.black // dark grey for light backgrounds
+                      ),
                     );
                   }),
                   const SizedBox(height: 4),
@@ -868,65 +872,95 @@ Future<void> uploadFile() async {
             )
           ],
         ),
-        body: Column(
-          children: [
-            Expanded(
-              child: ListView.builder(
-                reverse: true,
-                itemCount: messages.length,
-                itemBuilder: (_, i) =>
-                    buildMessage(messages[messages.length - 1 - i]),
-              ),
+        body: Stack(children: [
+          Positioned.fill(
+            child: Image.asset(
+              Theme.of(context).brightness == Brightness.dark
+                  ? 'assets/images/darkChatbackground.jpg' // 🌙 Dark mode image
+                  : 'assets/images/lightChatbackground.png', // ☀️ Light mode image
+              fit: BoxFit.cover,
             ),
-            if (isTyping)
-              Padding(
-                padding: EdgeInsets.all(8),
-                child: Text('Someone is typing...',
-                    style: TextStyle(fontStyle: FontStyle.italic)),
-              ),
-            if (currentUserRole != 'student')
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _controller,
-                        maxLines: null,
-                        keyboardType: TextInputType.multiline,
-                        onChanged: (val) => sendTyping(val.isNotEmpty),
-                        decoration: InputDecoration(
-                          hintText: 'Type a message',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
+          ),
+          SafeArea(
+            child: Column(
+              children: [
+                Expanded(
+                  child: ListView.builder(
+                    reverse: true,
+                    itemCount: messages.length,
+                    itemBuilder: (_, i) =>
+                        buildMessage(messages[messages.length - 1 - i]),
+                  ),
+                ),
+                if (isTyping)
+                  Padding(
+                    padding: EdgeInsets.all(8),
+                    child: Text('Someone is typing...',
+                        style: TextStyle(fontStyle: FontStyle.italic)),
+                  ),
+                if (currentUserRole != 'student')
+                  Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                          border: Border.all(
+                            color: Colors.grey, // border color
+                            width: 1.5, // border thickness
                           ),
-                        ),
+                          borderRadius: BorderRadius.circular(29)),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _controller,
+                              maxLines: null,
+                              keyboardType: TextInputType.multiline,
+                              onChanged: (val) => sendTyping(val.isNotEmpty),
+                              decoration: InputDecoration(
+                                hintText: 'Type a message',
+                                hintStyle: const TextStyle(
+                                  color: Colors.black54
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(29),
+                                ),
+                                filled: true,
+                                fillColor: Colors.white
+                              ),
+                            ),
+                          ),
+                          Row(
+                            children: [
+                              IconButton(
+                                icon: Icon(Icons.attach_file),
+                                color: Colors.white,
+                                onPressed: uploadFile,
+                              ),
+                              IconButton(
+                                icon: Icon(Icons.send),
+                                color: Colors.white,
+                                onPressed: () => sendMessage(_controller.text),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
-                    Row(
-                      children: [
-                        IconButton(
-                          icon: Icon(Icons.attach_file),
-                          onPressed: uploadFile,
-                        ),
-                        IconButton(
-                          icon: Icon(Icons.send),
-                          onPressed: () => sendMessage(_controller.text),
-                        ),
-                      ],
+                  )
+                else
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      'You do not have permission to send messages.',
+                      style: TextStyle(color: Colors.grey),
                     ),
-                  ],
-                ),
-              )
-            else
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  'You do not have permission to send messages.',
-                  style: TextStyle(color: Colors.grey),
-                ),
-              ),
-          ],
+                  ),
+              ],
+            ),
+          ),
+          ]
         ),
       );
 }

@@ -140,6 +140,7 @@ class _SignUpPageState extends State<SignUpPage> {
                                 const SizedBox(height: 20),
                                 TextField(
                                   controller: _password,
+                                  obscureText: true,
                                   decoration: InputDecoration(
                                     labelText: 'Set a Password',
                                     fillColor: Colors.grey[200],

@@ -55,7 +55,7 @@ class _MemberRequestState extends State<MemberRequest> {
 
     return Scaffold(
       appBar: AppBar(
-        // automaticallyImplyLeading: false,
+        automaticallyImplyLeading: false,
           title: Text("Member Requests")
       ),
       body: Column(
