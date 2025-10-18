@@ -66,6 +66,7 @@ class _AdminPageState extends State<AdminPage> {
             },
           ),
           actions: [
+            if(selectedIndex!=1)
             Consumer<ThemeProvider>(
               builder: (context, themeProvider, _) => IconButton(
                 icon: Icon(

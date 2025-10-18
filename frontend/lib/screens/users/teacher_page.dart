@@ -4,7 +4,7 @@ import 'package:frontend/controllers/auth_controller.dart';
 import 'package:frontend/provider/auth_provider.dart';
 import 'package:frontend/provider/themeProvider.dart';
 import 'package:frontend/provider/user_data_provider.dart';
-import 'package:frontend/screens/admin/attendance_views/students_attendance_view.dart';
+import 'package:frontend/screens/admin/attendance_views/view_student_attendance.dart';
 import 'package:frontend/screens/auth/onboarding_page.dart';
 import 'package:frontend/screens/chat/classlist.dart';
 import 'package:frontend/screens/teacher/attendance_page.dart';
