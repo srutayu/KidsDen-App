@@ -9,8 +9,8 @@ class LocalImageViewer extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(backgroundColor: Colors.transparent, title: Text(filePath),),
+      backgroundColor: Colors.white,
+      appBar: AppBar(backgroundColor: Colors.transparent, title: Text(filePath.split('/').last),),
       body: Center(
         child: PhotoView(
           imageProvider: FileImage(File(filePath)),

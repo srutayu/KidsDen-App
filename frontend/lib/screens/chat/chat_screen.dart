@@ -14,14 +14,16 @@ import 'package:provider/provider.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:cached_network_image/cached_network_image.dart';
+
 
 class ChatScreen extends StatefulWidget {
   final String authToken;
   final String classId;
   final String className;
 
-  ChatScreen(
-      {required this.authToken,
+  const ChatScreen(
+      {super.key, required this.authToken,
       required this.classId,
       required this.className});
 
@@ -29,12 +31,27 @@ class ChatScreen extends StatefulWidget {
   _ChatScreenState createState() => _ChatScreenState();
 }
 
+class LocalImageCache {
+  static final Map<String, ImageProvider> _cache = {};
+
+  static ImageProvider get(String path) {
+    if (_cache.containsKey(path)) return _cache[path]!;
+    final img = FileImage(File(path));
+    _cache[path] = img;
+    return img;
+  }
+
+  static void clear() => _cache.clear();
+}
+
+
 class _ChatScreenState extends State<ChatScreen> {
   late IO.Socket socket;
   List messages = [];
   Set<String> uploadingKeys = {}; // keys or local ids currently uploading
   bool isTyping = false;
-  TextEditingController _controller = TextEditingController();
+  final TextEditingController _controller = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
 
   // Cache: userId -> userName
   Map<String, String> userNamesCache = {};
@@ -50,7 +67,56 @@ class _ChatScreenState extends State<ChatScreen> {
     fetchCurrentUserDetails();
     fetchOldMessages();
     initSocket();
+    _scrollController.addListener(_handleScroll);
   }
+
+void _handleScroll() {
+  final pos = _scrollController.position;
+
+  // --- 1️⃣ Detect when user reaches top (to load older messages) ---
+  if (pos.pixels >= pos.maxScrollExtent - 200) {
+    print('⬆️ Near top of the list — load older messages');
+    // _loadOlderMessages();
+  }
+
+  // --- 2️⃣ Detect when user is near bottom (new messages area) ---
+  if (pos.pixels <= 200) {
+    print('⬇️ Near bottom of the list — newest messages zone');
+    // could auto-scroll to bottom or mark read, etc.
+  }
+
+  // --- 3️⃣ Preload next and previous few images ---
+  final double offset = pos.pixels;
+  final int approxIndex = (offset / 180).floor();
+
+  _precacheNextImages(approxIndex);
+  _precachePreviousImages(approxIndex);
+}
+
+void _precacheNextImages(int currentIndex) {
+  // In reverse mode, "next" means OLDER messages (further up)
+  final nextBatch = messages.skip(currentIndex + 1).take(5);
+  for (final msg in nextBatch) {
+    final url = msg['url'];
+    if (url != null && url.isNotEmpty) {
+      precacheImage(CachedNetworkImageProvider(url), context);
+    }
+  }
+}
+
+void _precachePreviousImages(int currentIndex) {
+  // In reverse mode, "previous" means NEWER messages (further down)
+  final start = (currentIndex - 3).clamp(0, messages.length - 1);
+  final prevBatch = messages.skip(start).take(3);
+  for (final msg in prevBatch) {
+    final url = msg['url'];
+    if (url != null && url.isNotEmpty) {
+      precacheImage(CachedNetworkImageProvider(url), context);
+    }
+  }
+}
+
+
 
   List<Map> _getMediaMessages() {
     final List<Map> media = [];
@@ -367,8 +433,12 @@ Future<void> uploadFile() async {
                                 child:
                                     Center(child: CircularProgressIndicator()));
                           }
-                          return Image.file(File(snap.data!),
-                              fit: BoxFit.cover, cacheWidth: 200,);
+                          return Image(
+  image: LocalImageCache.get(snap.data!),
+  fit: BoxFit.cover,
+  height: 160,
+);
+
                         },
                       )
                     : (url.isEmpty
@@ -379,28 +449,23 @@ Future<void> uploadFile() async {
                         : Stack(
                             alignment: Alignment.center,
                             children: [
-                              Image.network(
-                                url,
-                                height: 160,
-                                fit: BoxFit.cover,
-                                loadingBuilder: (ctx, child, progress) {
-                                  if (progress == null) return child;
-                                  return Container(
-                                      height: 160,
-                                      child: Center(
-                                          child: CircularProgressIndicator()));
-                                },
-                                errorBuilder: (ctx, error, stack) {
-                                  Future.microtask(() => _ensureUrlForParsed(
-                                      parsed, messageId,
-                                      force: true));
-                                  return Container(
-                                      height: 160,
-                                      color: Colors.black12,
-                                      child: Center(
-                                          child: Icon(Icons.broken_image)));
-                                },
-                              ),
+                              CachedNetworkImage(
+  imageUrl: url,
+  height: 160,
+  fit: BoxFit.cover,
+  placeholder: (context, _) => const SizedBox(
+    height: 160,
+    child: Center(child: CircularProgressIndicator()),
+  ),
+  errorWidget: (context, error, stackTrace) {
+    Future.microtask(() => _ensureUrlForParsed(parsed, messageId, force: true));
+    return Container(
+      height: 160,
+      color: Colors.black12,
+      child: const Center(child: Icon(Icons.broken_image)),
+    );
+  },
+),
                               Positioned(
                                 bottom: 8,
                                 right: 8,
@@ -891,6 +956,7 @@ Future<void> uploadFile() async {
               children: [
                 Expanded(
                   child: ListView.builder(
+                    controller: _scrollController,
                     reverse: true,
                     itemCount: messages.length,
                     itemBuilder: (_, i) =>
