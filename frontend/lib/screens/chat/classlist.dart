@@ -177,6 +177,7 @@ class _ClassListScreenState extends State<ClassListScreen> {
                         Text(
                           className,
                           style: TextStyle(
+                            color: (Colors.black),
                             fontSize: 16, 
                             fontWeight: FontWeight.bold,
                           ),

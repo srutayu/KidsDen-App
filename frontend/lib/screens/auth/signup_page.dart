@@ -45,7 +45,6 @@ class _SignUpPageState extends State<SignUpPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-        backgroundColor: const Color.fromARGB(255, 195, 244, 205),
         body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(40.0),
@@ -90,109 +89,130 @@ class _SignUpPageState extends State<SignUpPage> {
                                 const SizedBox(height: 20),
                                 TextField(
                                   controller: _name,
-                      decoration: InputDecoration(
-                        labelText: 'Name',
-                        filled: true,
-                        fillColor: Colors.grey[200],
-                        prefixIcon: Icon(Icons.person),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(20),
-                          borderSide: BorderSide(color: Colors.grey),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(20),
-                          borderSide: BorderSide(color: Colors.teal, width: 2),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20,),
-                    TextField(
-                        controller: _email,
-                        keyboardType: TextInputType.emailAddress,
-                        decoration: InputDecoration(
-                          labelText: 'Email ID',
-                          filled: true,
-                          fillColor: Colors.grey[200],
-                          prefixIcon: Icon(Icons.email),
-                          suffixIcon: _email.text.isEmpty
-                              ? null
-                              : Icon(
-                                  isEmailValid ? Icons.check_circle : Icons.cancel,
-                                  color: isEmailValid ? Colors.green : Colors.red,
-                                ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(20),
-                            borderSide: BorderSide(color: Colors.grey),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(20),
-                            borderSide: BorderSide(color: Colors.teal, width: 2),
-                          ),
-                        ),
-                      ),
-                    const SizedBox(height: 20),
-                    TextField(
-                      controller: _password,
-                      obscureText: true,
-                      decoration: InputDecoration(
-                        labelText: 'Set a Password',
-                        filled: true,
-                        fillColor: Colors.grey[200],
-                        prefixIcon: Icon(Icons.password),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(20),
-                          borderSide: BorderSide(color: Colors.grey),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(20),
-                          borderSide: BorderSide(color: Colors.teal, width: 2),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    TextField(
-                      controller: _confirmPasswordController,
-                      obscureText: true,
-                      decoration: InputDecoration(
-                        labelText: 'Confirm Password',
-                        filled: true,
-                        fillColor: Colors.grey[200],
-                        prefixIcon: Icon(Icons.lock_outline),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(20),
-                          borderSide: BorderSide(color: Colors.grey),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(20),
-                                        borderSide: BorderSide(
-                                            color: Colors.teal, width: 2),
-                                      ),
+                                  decoration: InputDecoration(
+                                    labelText: 'Name',
+                                    fillColor: Colors.grey[200],
+                                    prefixIcon: Icon(Icons.person),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                      borderSide:
+                                          BorderSide(color: Colors.grey),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                      borderSide: BorderSide(
+                                          color: Colors.teal, width: 2),
                                     ),
                                   ),
-                        SizedBox(height: 20,),
-                        Row(
-                          children: [
-                            Icon(
-                              isLengthValid ? Icons.check_circle : Icons.cancel,
-                              color: isLengthValid ? Colors.green : Colors.red,
-                            ),
-                            SizedBox(width: 8),
-                            Text("At least 6 characters"),
-                          ],
-                        ),
-                        SizedBox(height: 10,),
-                        Row(
-                          children: [
-                            Icon(
-                              isMatch ? Icons.check_circle : Icons.cancel,
-                              color : isMatch ? Colors.green : Colors.red,
-                            ),
-                            SizedBox(width: 8),
-                            Text("Passwords match"),
-                          ],),
-                          SizedBox(
-                            height: 10,
-                          ),
+                                ),
+                                const SizedBox(
+                                  height: 20,
+                                ),
+                                TextField(
+                                  controller: _email,
+                                  keyboardType: TextInputType.emailAddress,
+                                  decoration: InputDecoration(
+                                    labelText: 'Email ID',
+                                    fillColor: Colors.grey[200],
+                                    prefixIcon: Icon(Icons.email),
+                                    suffixIcon: _email.text.isEmpty
+                                        ? null
+                                        : Icon(
+                                            isEmailValid
+                                                ? Icons.check_circle
+                                                : Icons.cancel,
+                                            color: isEmailValid
+                                                ? Colors.green
+                                                : Colors.red,
+                                          ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                      borderSide:
+                                          BorderSide(color: Colors.grey),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                      borderSide: BorderSide(
+                                          color: Colors.teal, width: 2),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 20),
+                                TextField(
+                                  controller: _password,
+                                  obscureText: true,
+                                  decoration: InputDecoration(
+                                    labelText: 'Set a Password',
+                                    fillColor: Colors.grey[200],
+                                    prefixIcon: Icon(Icons.password),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                      borderSide:
+                                          BorderSide(color: Colors.grey),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                      borderSide: BorderSide(
+                                          color: Colors.teal, width: 2),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 20),
+                                TextField(
+                                  controller: _confirmPasswordController,
+                                  obscureText: true,
+                                  decoration: InputDecoration(
+                                    labelText: 'Confirm Password',
+                                    fillColor: Colors.grey[200],
+                                    prefixIcon: Icon(Icons.lock_outline),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                      borderSide:
+                                          BorderSide(color: Colors.grey),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                      borderSide: BorderSide(
+                                          color: Colors.teal, width: 2),
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(
+                                  height: 20,
+                                ),
+                                Row(
+                                  children: [
+                                    Icon(
+                                      isLengthValid
+                                          ? Icons.check_circle
+                                          : Icons.cancel,
+                                      color: isLengthValid
+                                          ? Colors.green
+                                          : Colors.red,
+                                    ),
+                                    SizedBox(width: 8),
+                                    Text("At least 6 characters"),
+                                  ],
+                                ),
+                                SizedBox(
+                                  height: 10,
+                                ),
+                                Row(
+                                  children: [
+                                    Icon(
+                                      isMatch
+                                          ? Icons.check_circle
+                                          : Icons.cancel,
+                                      color:
+                                          isMatch ? Colors.green : Colors.red,
+                                    ),
+                                    SizedBox(width: 8),
+                                    Text("Passwords match"),
+                                  ],
+                                ),
+                                SizedBox(
+                                  height: 10,
+                                ),
                           SizedBox(
                                   width: double.infinity,
                                   child: FilledButton(
