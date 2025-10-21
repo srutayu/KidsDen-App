@@ -26,7 +26,6 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color.fromARGB(255, 195, 244, 205),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(40.0),
@@ -54,15 +53,14 @@ class _LoginPageState extends State<LoginPage> {
                       controller: _email,
                       decoration: InputDecoration(
                         labelText: 'Email ID',
-                        filled: true,
                         fillColor: Colors.grey[200],
                         prefixIcon: Icon(Icons.email),
                         enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(20),
+                          borderRadius: BorderRadius.circular(15),
                           borderSide: BorderSide(color: Colors.grey),
                         ),
                         focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(20),
+                          borderRadius: BorderRadius.circular(15),
                           borderSide: BorderSide(color: Colors.teal, width: 2),
                         ),
                       ),
@@ -93,6 +91,70 @@ class _LoginPageState extends State<LoginPage> {
                       ),
                     ),
                     const SizedBox(height: 20),
+
+// // ✉️ Email Field
+// TextField(
+//   controller: _email,
+//   keyboardType: TextInputType.emailAddress,
+//   decoration: InputDecoration(
+//     labelText: 'Email ID',
+//     prefixIcon: const Icon(Icons.email),
+//     filled: true,
+//     fillColor: Colors.grey[200],
+//     contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+//     border: OutlineInputBorder(
+//       borderRadius: BorderRadius.circular(20),
+//       borderSide: BorderSide.none, // removes default grey line
+//     ),
+//     enabledBorder: OutlineInputBorder(
+//       borderRadius: BorderRadius.circular(20),
+//       borderSide: const BorderSide(color: Colors.grey),
+//     ),
+//     focusedBorder: OutlineInputBorder(
+//       borderRadius: BorderRadius.circular(20),
+//       borderSide: const BorderSide(color: Colors.teal, width: 2),
+//     ),
+//   ),
+// ),
+
+// const SizedBox(height: 20),
+
+// // 🔒 Password Field
+// TextField(
+//   controller: _password,
+//   obscureText: _obscureText,
+//   decoration: InputDecoration(
+//     labelText: 'Password',
+//     prefixIcon: const Icon(Icons.lock),
+//     suffixIcon: IconButton(
+//       icon: Icon(
+//         _obscureText ? Icons.visibility : Icons.visibility_off,
+//       ),
+//       onPressed: () {
+//         setState(() {
+//           _obscureText = !_obscureText;
+//         });
+//       },
+//     ),
+//     filled: true,
+//     fillColor: Colors.grey[200],
+//     contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+//     border: OutlineInputBorder(
+//       borderRadius: BorderRadius.circular(20),
+//       borderSide: BorderSide.none,
+//     ),
+//     enabledBorder: OutlineInputBorder(
+//       borderRadius: BorderRadius.circular(20),
+//       borderSide: const BorderSide(color: Colors.grey),
+//     ),
+//     focusedBorder: OutlineInputBorder(
+//       borderRadius: BorderRadius.circular(20),
+//       borderSide: const BorderSide(color: Colors.teal, width: 2),
+//     ),
+//   ),
+// ),
+
+                    const SizedBox(height: 20),
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton(onPressed: () async {
@@ -121,8 +183,6 @@ class _LoginPageState extends State<LoginPage> {
                           Provider.of<AuthProvider>(context, listen: false)
                               .setToken(token!);
                           await storage.write(key: 'token', value:  token);
-                          print('token is');
-                          print( await storage.read(key: 'token'));
                           Provider.of<UserProvider>(context, listen: false)
                               .fetchUserDetails(_email.text, token);
                           await storage.write(key: 'email', value: _email.text);

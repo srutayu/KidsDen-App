@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:frontend/controllers/auth_controller.dart';
 import 'package:frontend/provider/auth_provider.dart';
+import 'package:frontend/provider/themeProvider.dart';
 import 'package:frontend/provider/user_data_provider.dart';
-import 'package:frontend/screens/admin/attendance_views/students_attendance_view.dart';
+import 'package:frontend/screens/admin/attendance_views/view_student_attendance.dart';
 import 'package:frontend/screens/auth/onboarding_page.dart';
 import 'package:frontend/screens/chat/classlist.dart';
 import 'package:frontend/screens/teacher/attendance_page.dart';
@@ -78,6 +79,17 @@ class _TeacherPageState extends State<TeacherPage> {
       onPopInvokedWithResult: _handleBackPressed,
       child: Scaffold(
         appBar: AppBar(
+           leading: Consumer<ThemeProvider>(
+              builder: (context, themeProvider, _) => IconButton(
+                icon: Icon(
+                  themeProvider.isDarkMode
+                      ? Icons.dark_mode_rounded
+                      : Icons.light_mode_rounded,
+                ),
+                onPressed: themeProvider.toggleTheme,
+                tooltip: 'Toggle Dark Mode',
+              ),
+            ),
           title: const Text("Teacher Dashboard"),
           centerTitle: true,
           automaticallyImplyLeading: false,
