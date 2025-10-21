@@ -63,6 +63,7 @@ dependencies:
   photo_view: ^0.15.0
   dio: ^5.9.0
   cached_network_image: ^3.3.1
+  video_thumbnail: ^0.5.6
 
 
 

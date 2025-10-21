@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:frontend/constants/url.dart';
 import 'package:frontend/provider/user_data_provider.dart';
@@ -15,6 +16,7 @@ import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:video_thumbnail/video_thumbnail.dart';
 
 
 class ChatScreen extends StatefulWidget {
@@ -93,25 +95,58 @@ void _handleScroll() {
   _precachePreviousImages(approxIndex);
 }
 
-void _precacheNextImages(int currentIndex) {
+
+void _precacheNextImages(int currentIndex) async {
   // In reverse mode, "next" means OLDER messages (further up)
   final nextBatch = messages.skip(currentIndex + 1).take(5);
+
   for (final msg in nextBatch) {
     final url = msg['url'];
-    if (url != null && url.isNotEmpty) {
-      precacheImage(CachedNetworkImageProvider(url), context);
+    final name = msg['name'];
+    final mime = msg['mime'] ?? '';
+
+    if (url != null && url.isNotEmpty && mime.startsWith('image/')) {
+      final exists = await FileUtils.fileExists(name);
+      if (exists) {
+        final localPath = await FileUtils.getLocalFilePath(name);
+        final file = File(localPath);
+        if (await file.exists()) {
+          precacheImage(FileImage(file), context);
+          print('✅ Precaching local image: $localPath');
+        } else {
+          print('⚠️ File not found for precache: $localPath');
+        }
+      } else {
+        print('⏩ Skipped network precache for: $name (not local)');
+      }
     }
   }
 }
 
-void _precachePreviousImages(int currentIndex) {
+void _precachePreviousImages(int currentIndex) async {
   // In reverse mode, "previous" means NEWER messages (further down)
-  final start = (currentIndex - 3).clamp(0, messages.length - 1);
+  final start = (currentIndex - 5).clamp(0, messages.length - 1);
   final prevBatch = messages.skip(start).take(3);
+
   for (final msg in prevBatch) {
     final url = msg['url'];
-    if (url != null && url.isNotEmpty) {
-      precacheImage(CachedNetworkImageProvider(url), context);
+    final name = msg['name'];
+    final mime = msg['mime'] ?? '';
+
+    if (url != null && url.isNotEmpty && mime.startsWith('image/')) {
+      final exists = await FileUtils.fileExists(name);
+      if (exists) {
+        final localPath = await FileUtils.getLocalFilePath(name);
+        final file = File(localPath);
+        if (await file.exists()) {
+          precacheImage(FileImage(file), context);
+          debugPrint('✅ Precaching local image: $localPath');
+        } else {
+          debugPrint('⚠️ File missing during precache: $localPath');
+        }
+      } else {
+        debugPrint('⏩ Skipped network precache for: $name (not local)');
+      }
     }
   }
 }
@@ -150,10 +185,10 @@ void _precachePreviousImages(int currentIndex) {
     return media.reversed.toList();
   }
 
+
   Future<String> downloadPdf(String url, String filename) async {
     final dir = await getApplicationDocumentsDirectory();
     final file = File('${dir.path}/$filename');
-    print(file);
     if (!await file.exists()) {
       final resp = await http.get(Uri.parse(url));
       await file.writeAsBytes(resp.bodyBytes);
@@ -275,8 +310,9 @@ void _precachePreviousImages(int currentIndex) {
             // If incoming message has a file key, try to replace local optimistic message
             try {
               dynamic parsedIncoming = formattedMessage['content'];
-              if (parsedIncoming is String)
+              if (parsedIncoming is String) {
                 parsedIncoming = json.decode(parsedIncoming);
+              }
               if (parsedIncoming is Map &&
                   parsedIncoming['type'] == 'file' &&
                   parsedIncoming['key'] != null) {
@@ -399,7 +435,7 @@ Future<void> uploadFile() async {
     mounted: mounted,
   );
 }
-  Widget _buildFilePreview(Map parsed, String messageId) {
+Widget _buildFilePreview(Map parsed, String messageId) {
     final String url = parsed['url'] ?? '';
     final String name = parsed['name'] ?? '';
     final String mime = parsed['mime'] ?? '';
@@ -428,98 +464,159 @@ Future<void> uploadFile() async {
                         future: fileFuture,
                         builder: (context, snap) {
                           if (!snap.hasData) {
-                            return Container(
-                                height: 160,
-                                child:
-                                    Center(child: CircularProgressIndicator()));
+                            return const SizedBox(
+                              height: 160,
+                              child: Center(child: CircularProgressIndicator()),
+                            );
                           }
                           return Image(
-  image: LocalImageCache.get(snap.data!),
-  fit: BoxFit.cover,
-  height: 160,
-);
-
+                            image: LocalImageCache.get(snap.data!),
+                            fit: BoxFit.cover,
+                            height: 160,
+                          );
                         },
                       )
                     : (url.isEmpty
                         ? Container(
                             height: 160,
                             color: Colors.black12,
-                            child: Center(child: Icon(Icons.broken_image)))
+                            child:
+                                const Center(child: Icon(Icons.broken_image)),
+                          )
                         : Stack(
                             alignment: Alignment.center,
                             children: [
                               CachedNetworkImage(
-  imageUrl: url,
-  height: 160,
-  fit: BoxFit.cover,
-  placeholder: (context, _) => const SizedBox(
-    height: 160,
-    child: Center(child: CircularProgressIndicator()),
-  ),
-  errorWidget: (context, error, stackTrace) {
-    Future.microtask(() => _ensureUrlForParsed(parsed, messageId, force: true));
-    return Container(
-      height: 160,
-      color: Colors.black12,
-      child: const Center(child: Icon(Icons.broken_image)),
-    );
-  },
-),
+                                imageUrl: url,
+                                height: 160,
+                                fit: BoxFit.cover,
+                                placeholder: (context, _) => const SizedBox(
+                                  height: 160,
+                                  child: Center(
+                                      child: CircularProgressIndicator()),
+                                ),
+                                errorWidget: (context, error, stackTrace) {
+                                  Future.microtask(() => _ensureUrlForParsed(
+                                      parsed, messageId,
+                                      force: true));
+                                  return Container(
+                                    height: 160,
+                                    color: Colors.black12,
+                                    child: const Center(
+                                        child: Icon(Icons.broken_image)),
+                                  );
+                                },
+                              ),
                               Positioned(
                                 bottom: 8,
                                 right: 8,
                                 child: IconButton(
-                                  icon: Icon(Icons.download_rounded,
+                                  icon: const Icon(Icons.download_rounded,
                                       color: Colors.white),
                                   onPressed: () async {
                                     try {
-                                      // showToast("Downloading...");
                                       await FileUtils.downloadFile(url, name);
-                                      // showToast("Download complete");
                                       (context as Element).markNeedsBuild();
-                                    } catch (e) {
-                                      // showToast("Download failed");
-                                    }
+                                    } catch (e) {}
                                   },
                                 ),
                               )
                             ],
                           )))
-                : Container(
-                    height: 140,
-                    padding: EdgeInsets.all(12),
-                    child: Row(
-                      children: [
-                        Container(
-                          width: 96,
-                          height: 96,
-                          color: Colors.black12,
-                          child: Center(
-                            child: Icon(
-                                isVideo ? Icons.videocam : Icons.picture_as_pdf,
-                                size: 40),
-                          ),
-                        ),
-                        SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                : isVideo
+                    ? FutureBuilder<String>(
+                        future: FileUtils.getVideoThumbnail(exists, url, name),
+                        builder: (context, snap) {
+                          if (!snap.hasData) {
+                            return const SizedBox(
+                              height: 160,
+                              child: Center(child: CircularProgressIndicator()),
+                            );
+                          }
+                          return Stack(
+                            alignment: Alignment.center,
                             children: [
-                              Text(name,
-                                  style:
-                                      TextStyle(fontWeight: FontWeight.bold)),
-                              SizedBox(height: 6),
-                              Text(mime,
-                                  style: TextStyle(
-                                      color: Colors.black54, fontSize: 12)),
+                              Image.file(
+                                File(snap.data!),
+                                fit: BoxFit.cover,
+                                height: 160,
+                              ),
+                              const Icon(Icons.play_circle_outline,
+                                  size: 56, color: Colors.white70),
                             ],
+                          );
+                        },
+                      )
+                    : isPDF
+                        ? Container(
+                            height: 160,
+                            width: 160,
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade50,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                  color: Colors.red.shade200, width: 1),
+                            ),
+                            child: Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.picture_as_pdf,
+                                      color: Colors.red, size: 48),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                        : Container(
+                            height: 140,
+                            padding: const EdgeInsets.all(12),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 96,
+                                  height: 96,
+                                  color: Colors.black12,
+                                  child: Center(
+                                    child: Icon(
+                                        isVideo
+                                            ? Icons.videocam
+                                            : isPDF
+                                                ? Icons.picture_as_pdf
+                                                : Icons.insert_drive_file,
+                                        size: 40),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(name,
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.bold)),
+                                      const SizedBox(height: 6),
+                                      Text(mime,
+                                          style: const TextStyle(
+                                              color: Colors.black54,
+                                              fontSize: 12)),
+                                    ],
+                                  ),
+                                )
+                              ],
+                            ),
                           ),
-                        )
-                      ],
-                    ),
-                  ),
           ),
         );
 
@@ -578,7 +675,9 @@ Future<void> uploadFile() async {
     try {
       if (!force &&
           parsed['url'] != null &&
-          (parsed['url'] as String).isNotEmpty) return;
+          (parsed['url'] as String).isNotEmpty) {
+        return;
+      }
       final key = parsed['key'];
       if (key == null) return;
       // If we've already requested a presign and not forcing, skip
@@ -729,6 +828,8 @@ Future<void> uploadFile() async {
     final initials = getInitials(senderName);
 
     final bool isMe = currentUserId != null && senderId == currentUserId;
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
     // Build the message bubble first, then wrap with GestureDetector for deletion
     final bubble = Align(
       // alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
@@ -743,9 +844,46 @@ Future<void> uploadFile() async {
             child: Container(
               margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
               padding: const EdgeInsets.all(12),
+              
               decoration: BoxDecoration(
-                color: isMe ? Colors.greenAccent : Colors.grey.shade300,
-                borderRadius: BorderRadius.circular(16),
+                gradient: LinearGradient(
+                  colors: isMe
+                      ? (isDarkMode
+                          ? [
+                              const Color(0xFF43A047),
+                              const Color(0xFF2E7D32)
+                            ] // Dark sent
+                          : [
+                              const Color(0xFFB2FF59),
+                              const Color(0xFF76FF03)
+                            ]) // Light sent
+                      : (isDarkMode
+                          ? [
+                              const Color(0xFF616161),
+                              const Color.fromARGB(255, 98, 98, 98)
+                            ] // Dark received
+                          : [
+                              const Color(0xFFF5F5F5),
+                              const Color(0xFFE0E0E0)
+                            ]), // Light received
+                ),
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(18),
+                  topRight: const Radius.circular(18),
+                  bottomLeft: isMe
+                      ? const Radius.circular(18)
+                      : const Radius.circular(0),
+                  bottomRight: isMe
+                      ? const Radius.circular(0)
+                      : const Radius.circular(18),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.08),
+                    blurRadius: 3,
+                    offset: const Offset(1, 2),
+                  )
+                ],
               ),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -799,7 +937,9 @@ Future<void> uploadFile() async {
                       parsed is String ? parsed : (parsed?.toString() ?? ' '),
                       style: TextStyle(
                         fontSize: 16,
-                        color: Colors.black // dark grey for light backgrounds
+                        color: isDarkMode
+                            ? Colors.white
+                            : Colors.black // dark grey for light backgrounds
                       ),
                     );
                   }),
@@ -811,10 +951,12 @@ Future<void> uploadFile() async {
                     children: [
                       Text(
                         initials,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.bold,
-                          color: Colors.black54,
+                          color: isDarkMode
+                              ? Colors.white
+                              : const Color.fromARGB(255, 120, 120, 120),
                         ),
                       ),
                       SizedBox(width: 10),
@@ -825,9 +967,11 @@ Future<void> uploadFile() async {
                                     DateTime.parse(msg['timestamp']).toLocal())
                                 .toLowerCase()
                             : '',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 10,
-                          color: Colors.black38,
+                          color: isDarkMode
+                              ? Colors.white
+                              : const Color.fromARGB(255, 120, 120, 120),
                         ),
                       )
                     ],
@@ -989,6 +1133,7 @@ Future<void> uploadFile() async {
                               maxLines: null,
                               keyboardType: TextInputType.multiline,
                               onChanged: (val) => sendTyping(val.isNotEmpty),
+                              style: TextStyle(color: Colors.black),
                               decoration: InputDecoration(
                                 hintText: 'Type a message',
                                 hintStyle: const TextStyle(
