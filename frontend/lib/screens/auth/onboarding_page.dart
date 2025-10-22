@@ -14,7 +14,6 @@ class _OnboardingPageState extends State<OnboardingPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color.fromARGB(255, 168, 244, 184), 
       body: Padding(
         padding: const EdgeInsets.all(40.0), 
         child: Center(
@@ -49,7 +48,7 @@ class _OnboardingPageState extends State<OnboardingPage> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                       children: [
-                        ElevatedButton(
+                        OutlinedButton(
                             onPressed: () {
                               Navigator.push(context, MaterialPageRoute(
                                 builder: (context) {

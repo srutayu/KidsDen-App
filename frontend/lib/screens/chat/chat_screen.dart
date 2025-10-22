@@ -1,43 +1,66 @@
 import 'dart:io';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:frontend/constants/url.dart';
 import 'package:frontend/provider/user_data_provider.dart';
 import 'package:frontend/screens/chat/download_media.dart';
-import 'package:frontend/screens/chat/fullscreen_media.dart';
+import 'package:frontend/screens/chat/image_viewer.dart';
 import 'package:frontend/screens/chat/media_gallery.dart';
 import 'package:frontend/screens/chat/pdf_viewer.dart';
 import 'package:frontend/screens/chat/videoPlayer.dart';
+import 'package:frontend/services/s3_services.dart';
 import 'package:intl/intl.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:file_selector/file_selector.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:video_thumbnail/video_thumbnail.dart';
+
 
 class ChatScreen extends StatefulWidget {
   final String authToken;
   final String classId;
   final String className;
 
-  ChatScreen({required this.authToken, required this.classId, required this.className});
+  const ChatScreen(
+      {super.key, required this.authToken,
+      required this.classId,
+      required this.className});
 
   @override
   _ChatScreenState createState() => _ChatScreenState();
 }
+
+class LocalImageCache {
+  static final Map<String, ImageProvider> _cache = {};
+
+  static ImageProvider get(String path) {
+    if (_cache.containsKey(path)) return _cache[path]!;
+    final img = FileImage(File(path));
+    _cache[path] = img;
+    return img;
+  }
+
+  static void clear() => _cache.clear();
+}
+
 
 class _ChatScreenState extends State<ChatScreen> {
   late IO.Socket socket;
   List messages = [];
   Set<String> uploadingKeys = {}; // keys or local ids currently uploading
   bool isTyping = false;
-  TextEditingController _controller = TextEditingController();
+  final TextEditingController _controller = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
 
   // Cache: userId -> userName
   Map<String, String> userNamesCache = {};
 
   // Current logged-in userId
-  late final currentUserId = Provider.of<UserProvider>(context, listen: false).user?.id;
+  late final currentUserId =
+      Provider.of<UserProvider>(context, listen: false).user?.id;
   String? currentUserRole;
 
   @override
@@ -46,7 +69,89 @@ class _ChatScreenState extends State<ChatScreen> {
     fetchCurrentUserDetails();
     fetchOldMessages();
     initSocket();
+    _scrollController.addListener(_handleScroll);
   }
+
+void _handleScroll() {
+  final pos = _scrollController.position;
+
+  // --- 1️⃣ Detect when user reaches top (to load older messages) ---
+  if (pos.pixels >= pos.maxScrollExtent - 200) {
+    print('⬆️ Near top of the list — load older messages');
+    // _loadOlderMessages();
+  }
+
+  // --- 2️⃣ Detect when user is near bottom (new messages area) ---
+  if (pos.pixels <= 200) {
+    print('⬇️ Near bottom of the list — newest messages zone');
+    // could auto-scroll to bottom or mark read, etc.
+  }
+
+  // --- 3️⃣ Preload next and previous few images ---
+  final double offset = pos.pixels;
+  final int approxIndex = (offset / 180).floor();
+
+  _precacheNextImages(approxIndex);
+  _precachePreviousImages(approxIndex);
+}
+
+
+void _precacheNextImages(int currentIndex) async {
+  // In reverse mode, "next" means OLDER messages (further up)
+  final nextBatch = messages.skip(currentIndex + 1).take(5);
+
+  for (final msg in nextBatch) {
+    final url = msg['url'];
+    final name = msg['name'];
+    final mime = msg['mime'] ?? '';
+
+    if (url != null && url.isNotEmpty && mime.startsWith('image/')) {
+      final exists = await FileUtils.fileExists(name);
+      if (exists) {
+        final localPath = await FileUtils.getLocalFilePath(name);
+        final file = File(localPath);
+        if (await file.exists()) {
+          precacheImage(FileImage(file), context);
+          print('✅ Precaching local image: $localPath');
+        } else {
+          print('⚠️ File not found for precache: $localPath');
+        }
+      } else {
+        print('⏩ Skipped network precache for: $name (not local)');
+      }
+    }
+  }
+}
+
+void _precachePreviousImages(int currentIndex) async {
+  // In reverse mode, "previous" means NEWER messages (further down)
+  final start = (currentIndex - 5).clamp(0, messages.length - 1);
+  final prevBatch = messages.skip(start).take(3);
+
+  for (final msg in prevBatch) {
+    final url = msg['url'];
+    final name = msg['name'];
+    final mime = msg['mime'] ?? '';
+
+    if (url != null && url.isNotEmpty && mime.startsWith('image/')) {
+      final exists = await FileUtils.fileExists(name);
+      if (exists) {
+        final localPath = await FileUtils.getLocalFilePath(name);
+        final file = File(localPath);
+        if (await file.exists()) {
+          precacheImage(FileImage(file), context);
+          debugPrint('✅ Precaching local image: $localPath');
+        } else {
+          debugPrint('⚠️ File missing during precache: $localPath');
+        }
+      } else {
+        debugPrint('⏩ Skipped network precache for: $name (not local)');
+      }
+    }
+  }
+}
+
+
 
   List<Map> _getMediaMessages() {
     final List<Map> media = [];
@@ -63,7 +168,9 @@ class _ChatScreenState extends State<ChatScreen> {
 
       if (parsed is Map && parsed['type'] == 'file') {
         final mime = parsed['mime'] ?? '';
-        if (mime.startsWith('image/') || mime.startsWith('video/') || mime == 'application/pdf') {
+        if (mime.startsWith('image/') ||
+            mime.startsWith('video/') ||
+            mime == 'application/pdf') {
           media.add({
             'url': parsed['url'],
             'name': parsed['name'] ?? '',
@@ -78,23 +185,22 @@ class _ChatScreenState extends State<ChatScreen> {
     return media.reversed.toList();
   }
 
+
   Future<String> downloadPdf(String url, String filename) async {
-  final dir = await getApplicationDocumentsDirectory();
-  final file = File('${dir.path}/$filename');
-  print(file);
-  if (!await file.exists()) {
-    final resp = await http.get(Uri.parse(url));
-    await file.writeAsBytes(resp.bodyBytes);
+    final dir = await getApplicationDocumentsDirectory();
+    final file = File('${dir.path}/$filename');
+    if (!await file.exists()) {
+      final resp = await http.get(Uri.parse(url));
+      await file.writeAsBytes(resp.bodyBytes);
+    }
+    return file.path;
   }
-  return file.path;
-}
 
   Future<void> fetchCurrentUserDetails() async {
-  if (currentUserId == null) return;
+    if (currentUserId == null) return;
     try {
       final res = await http.get(
-        Uri.parse(
-            '${URL.chatURL}/classes/get-user-role?userId=$currentUserId'),
+        Uri.parse('${URL.chatURL}/classes/get-user-role?userId=$currentUserId'),
         headers: {'Authorization': 'Bearer ${widget.authToken}'},
       );
       if (res.statusCode == 200) {
@@ -126,13 +232,15 @@ class _ChatScreenState extends State<ChatScreen> {
         // If widget is already disposed, avoid calling setState
         if (!mounted) {
           messages = data;
-          print('Fetched ${messages.length} messages for class ${widget.classId} (widget disposed before update)');
+          print(
+              'Fetched ${messages.length} messages for class ${widget.classId} (widget disposed before update)');
           return;
         }
         setState(() {
           messages = data;
         });
-        print('Fetched ${messages.length} messages for class ${widget.classId}');
+        print(
+            'Fetched ${messages.length} messages for class ${widget.classId}');
       }
     } catch (e) {
       print('Error fetching old messages: $e');
@@ -176,18 +284,23 @@ class _ChatScreenState extends State<ChatScreen> {
       if (mounted) {
         setState(() {
           // Check if message already exists to prevent duplicates using multiple criteria
-          bool messageExists = messages.any((msg) => 
-            msg['_id'] == data['_id'] ||
-            (msg['content'] == data['content'] && 
-             msg['sender'] == data['sender'] && 
-             (msg['timestamp'] != null && data['timestamp'] != null &&
-              DateTime.parse(msg['timestamp']).difference(DateTime.parse(data['timestamp'])).abs().inSeconds < 5))
-          );
-          
+          bool messageExists = messages.any((msg) =>
+              msg['_id'] == data['_id'] ||
+              (msg['content'] == data['content'] &&
+                  msg['sender'] == data['sender'] &&
+                  (msg['timestamp'] != null &&
+                      data['timestamp'] != null &&
+                      DateTime.parse(msg['timestamp'])
+                              .difference(DateTime.parse(data['timestamp']))
+                              .abs()
+                              .inSeconds <
+                          5)));
+
           if (!messageExists) {
             // Ensure consistent message structure
             final formattedMessage = {
-              '_id': data['_id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
+              '_id': data['_id'] ??
+                  DateTime.now().millisecondsSinceEpoch.toString(),
               'content': data['content'],
               'sender': data['sender'],
               'senderRole': data['senderRole'],
@@ -197,18 +310,30 @@ class _ChatScreenState extends State<ChatScreen> {
             // If incoming message has a file key, try to replace local optimistic message
             try {
               dynamic parsedIncoming = formattedMessage['content'];
-              if (parsedIncoming is String) parsedIncoming = json.decode(parsedIncoming);
-              if (parsedIncoming is Map && parsedIncoming['type'] == 'file' && parsedIncoming['key'] != null) {
+              if (parsedIncoming is String) {
+                parsedIncoming = json.decode(parsedIncoming);
+              }
+              if (parsedIncoming is Map &&
+                  parsedIncoming['type'] == 'file' &&
+                  parsedIncoming['key'] != null) {
                 final key = parsedIncoming['key'];
                 final idx = messages.indexWhere((m) {
                   try {
                     final id = m['_id'] as String? ?? '';
-                    final pc = m['content'] is String ? json.decode(m['content']) : m['content'];
+                    final pc = m['content'] is String
+                        ? json.decode(m['content'])
+                        : m['content'];
                     // Match any optimistic local message (id startsWith 'local_') with same key,
                     // or a message that still has a local preview/path. This avoids races where
                     // localPreviewBase64 was removed before the server relay arrives.
-                    return pc is Map && pc['key'] == key && (id.startsWith('local_') || pc['localPreviewBase64'] != null || pc['localPath'] != null);
-                  } catch (e) { return false; }
+                    return pc is Map &&
+                        pc['key'] == key &&
+                        (id.startsWith('local_') ||
+                            pc['localPreviewBase64'] != null ||
+                            pc['localPath'] != null);
+                  } catch (e) {
+                    return false;
+                  }
                 });
                 if (idx >= 0) {
                   // preserve local id removed -> capture local id so we can clear uploading state
@@ -218,15 +343,24 @@ class _ChatScreenState extends State<ChatScreen> {
                   try {
                     final existingContent = messages[idx]['content'];
                     dynamic existingParsed = existingContent;
-                    if (existingContent is String) existingParsed = json.decode(existingContent);
+                    if (existingContent is String)
+                      existingParsed = json.decode(existingContent);
 
                     dynamic serverParsed = formattedMessage['content'];
-                    if (serverParsed is String) serverParsed = json.decode(serverParsed);
+                    if (serverParsed is String)
+                      serverParsed = json.decode(serverParsed);
 
-                    if (existingParsed is Map && existingParsed['localPreviewBase64'] != null && serverParsed is Map) {
+                    if (existingParsed is Map &&
+                        existingParsed['localPreviewBase64'] != null &&
+                        serverParsed is Map) {
                       // only copy localPreviewBase64 if server hasn't provided a URL or thumbnail yet
-                      if ((serverParsed['url'] == null || (serverParsed['url'] as String).isEmpty) && (serverParsed['thumbnailUrl'] == null || (serverParsed['thumbnailUrl'] as String).isEmpty)) {
-                        serverParsed['localPreviewBase64'] = existingParsed['localPreviewBase64'];
+                      if ((serverParsed['url'] == null ||
+                              (serverParsed['url'] as String).isEmpty) &&
+                          (serverParsed['thumbnailUrl'] == null ||
+                              (serverParsed['thumbnailUrl'] as String)
+                                  .isEmpty)) {
+                        serverParsed['localPreviewBase64'] =
+                            existingParsed['localPreviewBase64'];
                         formattedMessage['content'] = json.encode(serverParsed);
                       }
                     }
@@ -248,7 +382,8 @@ class _ChatScreenState extends State<ChatScreen> {
               messages.add(formattedMessage);
             }
             // Sort messages by timestamp to maintain order
-            messages.sort((a, b) => DateTime.parse(a['timestamp']).compareTo(DateTime.parse(b['timestamp'])));
+            messages.sort((a, b) => DateTime.parse(a['timestamp'])
+                .compareTo(DateTime.parse(b['timestamp'])));
           }
         });
       }
@@ -256,7 +391,8 @@ class _ChatScreenState extends State<ChatScreen> {
 
     socket.on('typing', (data) {
       print('Received typing event: $data');
-      if (mounted && data['sender'] != currentUserId) { // Only show if not current user
+      if (mounted && data['sender'] != currentUserId) {
+        // Only show if not current user
         setState(() {
           isTyping = data['isTyping'] ?? false;
         });
@@ -264,524 +400,291 @@ class _ChatScreenState extends State<ChatScreen> {
     });
   }
 
- void sendMessage(String msg) {
-  if (msg.trim().isEmpty) return;
-  if (currentUserId == null) return;
-  
-  if (!socket.connected) {
-    print('Socket not connected, attempting to reconnect...');
-    socket.connect();
-    return;
-  }
+  void sendMessage(String msg) {
+    if (msg.trim().isEmpty) return;
+    if (currentUserId == null) return;
 
-  print('Sending message: $msg');
-  socket.emit('message', {
-    'classId': widget.classId,
-    'message': msg,
-    'sender': currentUserId,
-  });
-
-  _controller.clear();
-  sendTyping(false); // Stop typing indicator when message is sent
-}
-
-  // Future<void> uploadFile() async {
-  //   if (currentUserId == null) return;
-  //   try {
-  //     final XTypeGroup typeGroup = XTypeGroup(label: 'files', extensions: ['jpg', 'jpeg', 'png', 'pdf', 'mp4', 'mov', 'doc', 'docx']);
-  //     // Allow multiple file selection (max 10)
-  //     final List<XFile>? files = await openFiles(acceptedTypeGroups: [typeGroup]);
-  //     if (files == null || files.isEmpty) return;
-
-  //     final selection = files.take(10).toList();
-
-  //     // Prepare metadata for presign request
-  //     final filesMeta = selection.map((f) => ({ 'fileName': f.name, 'contentType': f.mimeType ?? 'application/octet-stream' })).toList();
-
-  //     // 1) Request batch presigned URLs from backend
-  //     final presignRes = await http.post(
-  //       Uri.parse('${URL.chatURL}/classes/request-presign'),
-  //       headers: {
-  //         'Authorization': 'Bearer ${widget.authToken}',
-  //         'Content-Type': 'application/json'
-  //       },
-  //       body: json.encode({ 'files': filesMeta, 'classId': widget.classId }),
-  //     );
-
-  //     if (presignRes.statusCode != 200) {
-  //       print('Presign request failed: ${presignRes.statusCode} ${presignRes.body}');
-  //       return;
-  //     }
-
-  //     final presignData = json.decode(presignRes.body);
-  //     final presignedFiles = presignData['files'] as List<dynamic>? ?? [];
-
-  //     // Map keys by original name for pairing
-  //     final presignMap = { for (var p in presignedFiles) p['fileName'] : p };
-
-  //     // For each selected file, upload and confirm
-  //     for (final f in selection) {
-  //       try {
-  //         final bytes = await f.readAsBytes();
-  //         final pres = presignMap[f.name];
-  //         if (pres == null) {
-  //           print('No presign returned for ${f.name}');
-  //           continue;
-  //         }
-
-  //         final uploadUrl = pres['uploadUrl'];
-  //         final getUrl = pres['getUrl'];
-  //         final key = pres['key'];
-
-  //         // Insert optimistic local preview message
-  //         try {
-  //           final base64Data = base64Encode(bytes);
-  //           final tempId = 'local_${DateTime.now().millisecondsSinceEpoch}_${f.name}';
-  //           final tempMessage = {
-  //             '_id': tempId,
-  //             'content': json.encode({ 'type': 'file', 'key': key, 'localPreviewBase64': base64Data, 'mime': f.mimeType ?? 'application/octet-stream', 'name': f.name }),
-  //             'sender': currentUserId,
-  //             'senderRole': currentUserRole,
-  //             'timestamp': DateTime.now().toIso8601String(),
-  //             'classId': widget.classId,
-  //           };
-  //           if (mounted) {
-  //             setState(() {
-  //               messages.add(tempMessage);
-  //               uploadingKeys.add(tempId);
-  //             });
-  //           } else {
-  //             messages.add(tempMessage);
-  //             uploadingKeys.add(tempId);
-  //           }
-  //         } catch (e) {
-  //           print('Error creating local preview: $e');
-  //         }
-
-  //         // 2) Upload directly to S3
-  //         final putRes = await http.put(Uri.parse(uploadUrl), headers: {
-  //           'Content-Type': f.mimeType ?? 'application/octet-stream'
-  //         }, body: bytes);
-
-  //         if (putRes.statusCode != 200 && putRes.statusCode != 204) {
-  //           print('PUT to S3 failed for ${f.name}: ${putRes.statusCode} ${putRes.body}');
-  //           continue;
-  //         }
-
-  //         // 3) Confirm upload
-  //         final confirmRes = await http.post(
-  //           Uri.parse('${URL.chatURL}/classes/confirm-upload'),
-  //           headers: {
-  //             'Authorization': 'Bearer ${widget.authToken}',
-  //             'Content-Type': 'application/json'
-  //           },
-  //           body: json.encode({ 'key': key, 'classId': widget.classId, 'getUrl': getUrl, 'contentType': f.mimeType ?? 'application/octet-stream', 'name': f.name, 'size': bytes.length }),
-  //         );
-
-  //         if (confirmRes.statusCode == 200) {
-  //           print('Upload confirmed for ${f.name}');
-  //           // Try to parse returned message (if server returned it) and replace optimistic message
-  //           try {
-  //             final respBody = json.decode(confirmRes.body);
-  //             // if server returns created message directly
-  //             if (respBody != null && (respBody['_id'] != null || respBody['message'] != null)) {
-  //               Map serverMsg = respBody;
-  //               if (respBody['message'] != null) serverMsg = respBody['message'];
-  //               // replace any optimistic message with same key
-  //               final serverKey = (serverMsg['content'] is String) ? (() { try { return json.decode(serverMsg['content'])['key']; } catch (e) { return null; } })() : (serverMsg['content'] is Map ? serverMsg['content']['key'] : null);
-  //               if (serverKey != null) {
-  //                 final idx = messages.indexWhere((m) {
-  //                   try {
-  //                     final id = m['_id'] as String? ?? '';
-  //                     final pc = m['content'] is String ? json.decode(m['content']) : m['content'];
-  //                     return pc is Map && pc['key'] == serverKey && (id.startsWith('local_') || pc['localPreviewBase64'] != null || pc['localPath'] != null);
-  //                   } catch (e) { return false; }
-  //                 });
-  //                 if (idx >= 0) {
-  //                   setState(() {
-  //                     messages[idx] = serverMsg;
-  //                   });
-  //                 }
-  //               }
-  //             }
-  //           } catch (e) {
-  //             // ignore parse errors
-  //           }
-  //         } else {
-  //           print('Confirm failed for ${f.name}: ${confirmRes.statusCode} ${confirmRes.body}');
-  //         }
-
-  //         // Always clear uploading flag for any local optimistic message that matches this file key
-  //         _clearUploadingForKey(key);
-  //       } catch (e) {
-  //         print('Error uploading file ${f.name}: $e');
-  //       }
-  //     }
-  //   } catch (e) {
-  //     print('Error uploading files: $e');
-  //   }
-  // }
-Future<void> uploadFile() async {
-  if (currentUserId == null) return;
-  try {
-    final XTypeGroup typeGroup = XTypeGroup(
-      label: 'files',
-      extensions: ['jpg', 'jpeg', 'png', 'pdf', 'mp4', 'mov', 'doc', 'docx'],
-    );
-
-    // Allow multiple file selection (max 10)
-    final List<XFile>? files = await openFiles(acceptedTypeGroups: [typeGroup]);
-    if (files == null || files.isEmpty) return;
-
-    final selection = files.take(10).toList();
-
-    // Generate base timestamp for consistent batch naming
-    final baseTimestamp = DateTime.now().millisecondsSinceEpoch;
-
-    // Prepare metadata for presign request with new filenames
-    final filesMeta = <Map<String, String>>[];
-
-    for (int i = 0; i < selection.length; i++) {
-      final f = selection[i];
-      final ext = f.name.split('.').last;
-      final newName = selection.length == 1
-          ? 'file_${baseTimestamp}.$ext'
-          : 'file_${baseTimestamp}_${i + 1}.$ext';
-      filesMeta.add({
-        'fileName': newName,
-        'contentType': f.mimeType ?? 'application/octet-stream',
-      });
-    }
-
-    // 1) Request batch presigned URLs from backend
-    final presignRes = await http.post(
-      Uri.parse('${URL.chatURL}/classes/request-presign'),
-      headers: {
-        'Authorization': 'Bearer ${widget.authToken}',
-        'Content-Type': 'application/json'
-      },
-      body: json.encode({'files': filesMeta, 'classId': widget.classId}),
-    );
-
-    if (presignRes.statusCode != 200) {
-      print('Presign request failed: ${presignRes.statusCode} ${presignRes.body}');
+    if (!socket.connected) {
+      print('Socket not connected, attempting to reconnect...');
+      socket.connect();
       return;
     }
 
-    final presignData = json.decode(presignRes.body);
-    final presignedFiles = presignData['files'] as List<dynamic>? ?? [];
+    print('Sending message: $msg');
+    socket.emit('message', {
+      'classId': widget.classId,
+      'message': msg,
+      'sender': currentUserId,
+    });
 
-    // Map by new file name
-    final presignMap = {for (var p in presignedFiles) p['fileName']: p};
-
-    // Upload each file with renamed name
-    for (int i = 0; i < selection.length; i++) {
-      final f = selection[i];
-      final ext = f.name.split('.').last;
-      final newName = selection.length == 1
-          ? 'file_${baseTimestamp}.$ext'
-          : 'file_${baseTimestamp}_${i + 1}.$ext';
-
-      try {
-        final bytes = await f.readAsBytes();
-        final pres = presignMap[newName];
-        if (pres == null) {
-          print('No presign returned for $newName');
-          continue;
-        }
-
-        final uploadUrl = pres['uploadUrl'];
-        final getUrl = pres['getUrl'];
-        final key = pres['key'];
-
-        // Insert optimistic local preview message
-        try {
-          final base64Data = base64Encode(bytes);
-          final tempId = 'local_${DateTime.now().millisecondsSinceEpoch}_$newName';
-          final tempMessage = {
-            '_id': tempId,
-            'content': json.encode({
-              'type': 'file',
-              'key': key,
-              'localPreviewBase64': base64Data,
-              'mime': f.mimeType ?? 'application/octet-stream',
-              'name': newName
-            }),
-            'sender': currentUserId,
-            'senderRole': currentUserRole,
-            'timestamp': DateTime.now().toIso8601String(),
-            'classId': widget.classId,
-          };
-          if (mounted) {
-            setState(() {
-              messages.add(tempMessage);
-              uploadingKeys.add(tempId);
-            });
-          } else {
-            messages.add(tempMessage);
-            uploadingKeys.add(tempId);
-          }
-        } catch (e) {
-          print('Error creating local preview: $e');
-        }
-
-        // 2) Upload directly to S3
-        final putRes = await http.put(
-          Uri.parse(uploadUrl),
-          headers: {'Content-Type': f.mimeType ?? 'application/octet-stream'},
-          body: bytes,
-        );
-
-        if (putRes.statusCode != 200 && putRes.statusCode != 204) {
-          print('PUT to S3 failed for $newName: ${putRes.statusCode} ${putRes.body}');
-          continue;
-        }
-
-        // 3) Confirm upload
-        final confirmRes = await http.post(
-          Uri.parse('${URL.chatURL}/classes/confirm-upload'),
-          headers: {
-            'Authorization': 'Bearer ${widget.authToken}',
-            'Content-Type': 'application/json'
-          },
-          body: json.encode({
-            'key': key,
-            'classId': widget.classId,
-            'getUrl': getUrl,
-            'contentType': f.mimeType ?? 'application/octet-stream',
-            'name': newName,
-            'size': bytes.length
-          }),
-        );
-
-        if (confirmRes.statusCode == 200) {
-          print('Upload confirmed for $newName');
-
-          // Try to replace optimistic message with server message
-          try {
-            final respBody = json.decode(confirmRes.body);
-            if (respBody != null && (respBody['_id'] != null || respBody['message'] != null)) {
-              Map serverMsg = respBody;
-              if (respBody['message'] != null) serverMsg = respBody['message'];
-
-              final serverKey = (serverMsg['content'] is String)
-                  ? (() {
-                      try {
-                        return json.decode(serverMsg['content'])['key'];
-                      } catch (e) {
-                        return null;
-                      }
-                    })()
-                  : (serverMsg['content'] is Map
-                      ? serverMsg['content']['key']
-                      : null);
-
-              if (serverKey != null) {
-                final idx = messages.indexWhere((m) {
-                  try {
-                    final id = m['_id'] as String? ?? '';
-                    final pc =
-                        m['content'] is String ? json.decode(m['content']) : m['content'];
-                    return pc is Map &&
-                        pc['key'] == serverKey &&
-                        (id.startsWith('local_') ||
-                            pc['localPreviewBase64'] != null ||
-                            pc['localPath'] != null);
-                  } catch (e) {
-                    return false;
-                  }
-                });
-                if (idx >= 0) {
-                  setState(() {
-                    messages[idx] = serverMsg;
-                  });
-                }
-              }
-            }
-          } catch (e) {
-            // ignore parse errors
-          }
-        } else {
-          print('Confirm failed for $newName: ${confirmRes.statusCode} ${confirmRes.body}');
-        }
-
-        // Always clear uploading flag
-        _clearUploadingForKey(key);
-      } catch (e) {
-        print('Error uploading file ${f.name}: $e');
-      }
-    }
-  } catch (e) {
-    print('Error uploading files: $e');
+    _controller.clear();
+    sendTyping(false); // Stop typing indicator when message is sent
   }
+
+
+Future<void> uploadFile() async {
+  await UploadService.uploadFiles(
+    authToken: widget.authToken,
+    classId: widget.classId,
+    currentUserId: currentUserId!,
+    currentUserRole: currentUserRole,
+    messages: messages,
+    uploadingKeys: uploadingKeys,
+    baseUrl: URL.chatURL,
+    setState: setState,
+    mounted: mounted,
+  );
 }
-
-
 Widget _buildFilePreview(Map parsed, String messageId) {
     final String url = parsed['url'] ?? '';
     final String name = parsed['name'] ?? '';
     final String mime = parsed['mime'] ?? '';
-    final String? base64Preview = parsed['localPreviewBase64'];
-
     final bool isImage = mime.startsWith('image/');
     final bool isVideo = mime.startsWith('video/');
     final bool isPDF = mime.startsWith('application/pdf');
 
-    final preview = Container(
-      constraints:
-          BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.72),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade200,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: isImage
-            ? (base64Preview != null
-                ? SizedBox(
-                    height: 160,
-                    child: Image.memory(base64Decode(base64Preview),
-                        fit: BoxFit.cover))
-                : (url.isEmpty
-                    ? Container(
-                        height: 160,
-                        color: Colors.black12,
-                        child: Center(child: Icon(Icons.broken_image)))
-                    : SizedBox(
-                        height: 160,
-                        child: Image.network(
-                          url,
-                          fit: BoxFit.cover,
-                          loadingBuilder: (ctx, child, progress) {
-                            if (progress == null) return child;
-                            return SizedBox(
+    return FutureBuilder<bool>(
+      future: FileUtils.fileExists(name),
+      builder: (context, snapshot) {
+        final exists = snapshot.data ?? false;
+        final fileFuture = exists ? FileUtils.getLocalFilePath(name) : null;
+
+        final preview = Container(
+          constraints: BoxConstraints(
+              maxWidth: MediaQuery.of(context).size.width * 0.72),
+          decoration: BoxDecoration(
+            color: Colors.grey.shade200,
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: isImage
+                ? (exists
+                    ? FutureBuilder<String>(
+                        future: fileFuture,
+                        builder: (context, snap) {
+                          if (!snap.hasData) {
+                            return const SizedBox(
+                              height: 160,
+                              child: Center(child: CircularProgressIndicator()),
+                            );
+                          }
+                          return Image(
+                            image: LocalImageCache.get(snap.data!),
+                            fit: BoxFit.cover,
+                            height: 160,
+                          );
+                        },
+                      )
+                    : (url.isEmpty
+                        ? Container(
+                            height: 160,
+                            color: Colors.black12,
+                            child:
+                                const Center(child: Icon(Icons.broken_image)),
+                          )
+                        : Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              CachedNetworkImage(
+                                imageUrl: url,
                                 height: 160,
-                                child:
-                                    Center(child: CircularProgressIndicator()));
-                          },
-                          errorBuilder: (ctx, error, stack) {
-                            Future.microtask(() {
-                              try {
-                                _ensureUrlForParsed(parsed, messageId,
-                                    force: true);
-                              } catch (e) {}
-                            });
-                            if (base64Preview != null) {
-                              return SizedBox(
+                                fit: BoxFit.cover,
+                                placeholder: (context, _) => const SizedBox(
                                   height: 160,
-                                  child: Image.memory(
-                                      base64Decode(base64Preview),
-                                      fit: BoxFit.cover));
-                            }
-                            return Container(
+                                  child: Center(
+                                      child: CircularProgressIndicator()),
+                                ),
+                                errorWidget: (context, error, stackTrace) {
+                                  Future.microtask(() => _ensureUrlForParsed(
+                                      parsed, messageId,
+                                      force: true));
+                                  return Container(
+                                    height: 160,
+                                    color: Colors.black12,
+                                    child: const Center(
+                                        child: Icon(Icons.broken_image)),
+                                  );
+                                },
+                              ),
+                              Positioned(
+                                bottom: 8,
+                                right: 8,
+                                child: IconButton(
+                                  icon: const Icon(Icons.download_rounded,
+                                      color: Colors.white),
+                                  onPressed: () async {
+                                    try {
+                                      await FileUtils.downloadFile(url, name);
+                                      (context as Element).markNeedsBuild();
+                                    } catch (e) {}
+                                  },
+                                ),
+                              )
+                            ],
+                          )))
+                : isVideo
+                    ? FutureBuilder<String>(
+                        future: FileUtils.getVideoThumbnail(exists, url, name),
+                        builder: (context, snap) {
+                          if (!snap.hasData) {
+                            return const SizedBox(
+                              height: 160,
+                              child: Center(child: CircularProgressIndicator()),
+                            );
+                          }
+                          return Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              Image.file(
+                                File(snap.data!),
+                                fit: BoxFit.cover,
                                 height: 160,
-                                color: Colors.black12,
-                                child: Center(child: Icon(Icons.broken_image)));
-                          },
-                        ),
-                      )))
-            : Container(
-                height: 140,
-                padding: EdgeInsets.all(12),
-                child: Row(
+                              ),
+                              const Icon(Icons.play_circle_outline,
+                                  size: 56, color: Colors.white70),
+                            ],
+                          );
+                        },
+                      )
+                    : isPDF
+                        ? Container(
+                            height: 160,
+                            width: 160,
+                            decoration: BoxDecoration(
+                              color: Colors.red.shade50,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                  color: Colors.red.shade200, width: 1),
+                            ),
+                            child: Center(
+                              child: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  const Icon(Icons.picture_as_pdf,
+                                      color: Colors.red, size: 48),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.black87,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                        : Container(
+                            height: 140,
+                            padding: const EdgeInsets.all(12),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 96,
+                                  height: 96,
+                                  color: Colors.black12,
+                                  child: Center(
+                                    child: Icon(
+                                        isVideo
+                                            ? Icons.videocam
+                                            : isPDF
+                                                ? Icons.picture_as_pdf
+                                                : Icons.insert_drive_file,
+                                        size: 40),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(name,
+                                          style: const TextStyle(
+                                              fontWeight: FontWeight.bold)),
+                                      const SizedBox(height: 6),
+                                      Text(mime,
+                                          style: const TextStyle(
+                                              color: Colors.black54,
+                                              fontSize: 12)),
+                                    ],
+                                  ),
+                                )
+                              ],
+                            ),
+                          ),
+          ),
+        );
+
+        return GestureDetector(
+          onTap: () async {
+            if (isVideo) {
+              final path = exists
+                  ? await FileUtils.getLocalFilePath(name)
+                  : await FileUtils.downloadFile(url, name);
+              if (context.mounted) {
+                Navigator.of(context).push(MaterialPageRoute(
+                  builder: (_) =>
+                      VideoPlayerScreen(videoUrl: path, isLocal: true),
+                ));
+              }
+              
+            } else if (isImage) {
+              final path = exists
+                  ? await FileUtils.getLocalFilePath(name)
+                  : await FileUtils.downloadFile(url, name);
+              if (context.mounted) {
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => LocalImageViewer(filePath: path),
+                  ),
+                );
+              }
+              
+            } else if (isPDF) {
+              final path = exists
+                  ? await FileUtils.getLocalFilePath(name)
+                  : await FileUtils.downloadFile(url, name);
+
+              Navigator.of(context).push(MaterialPageRoute(
+                builder: (_) => PdfViewerScreen(filePath: path),
+              ));
+            }
+          },
+          child: isVideo
+              ? Stack(
+                  alignment: Alignment.center,
                   children: [
-                    Container(
-                      width: 96,
-                      height: 96,
-                      color: Colors.black12,
-                      child: Center(
-                        child: Icon(
-                            isVideo ? Icons.videocam : Icons.picture_as_pdf,
-                            size: 40),
-                      ),
-                    ),
-                    SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(name,
-                              style: TextStyle(fontWeight: FontWeight.bold)),
-                          SizedBox(height: 6),
-                          Text(mime,
-                              style: TextStyle(
-                                  color: Colors.black54, fontSize: 12)),
-                        ],
-                      ),
-                    )
+                    preview,
+                    Icon(Icons.play_circle_outline,
+                        size: 56, color: Colors.white70),
                   ],
-                ),
-              ),
-      ),
-    );
-
-    // Wrap in GestureDetector to open fullscreen on tap
-    return GestureDetector(
-      onTap: () async {
-        if (isVideo) {
-          // On tap: download if missing, then open player
-          final path = await FileUtils.downloadFile(url, name);
-
-          Navigator.of(context).push(MaterialPageRoute(
-            builder: (_) => VideoPlayerScreen(
-              videoUrl: path, // local path now
-              isLocal: true,
-            ),
-          ));
-        }
-        //  else if (isImage) {
-        //   // Handle full-screen image preview (existing logic)
-        //   final media = _getMediaMessages();
-        //   final idx = media.indexWhere((m) => (m['url'] ?? '') == url);
-        //   final start = idx >= 0 ? idx : 0;
-        //   Navigator.of(context).push(MaterialPageRoute(
-        //     builder: (_) =>
-        //         FullScreenMedia(initialIndex: start, mediaList: media),
-        //   ));
-        // } 
-        else if (isImage) {
-          // Download if missing, then open fullscreen image
-          final path = await FileUtils.downloadFile(url, name);
-          final media = _getMediaMessages();
-          final idx = media.indexWhere((m) => (m['url'] ?? '') == url);
-          final start = idx >= 0 ? idx : 0;
-
-          // Pass localPath to FullScreenMedia if you update it to handle local files
-          Navigator.of(context).push(MaterialPageRoute(
-            builder: (_) =>
-                FullScreenMedia(initialIndex: start, mediaList: media),
-          ));
-        } else if (isPDF) {
-          final localPath = await downloadPdf(url, name);
-          Navigator.of(context).push(MaterialPageRoute(
-            builder: (_) => PdfViewerScreen(
-              filePath: localPath,
-            ),
-          ));
-        }
+                )
+              : preview,
+        );
       },
-      child: isVideo
-          ? Stack(
-              alignment: Alignment.center,
-              children: [
-                preview,
-                Icon(Icons.play_circle_outline,
-                    size: 56, color: Colors.white70),
-              ],
-            )
-          : preview,
     );
   }
 
-  Future<void> _ensureUrlForParsed(Map parsed, String messageId, {bool force = false}) async {
+  Future<void> _ensureUrlForParsed(Map parsed, String messageId,
+      {bool force = false}) async {
     try {
-      if (!force && parsed['url'] != null && (parsed['url'] as String).isNotEmpty) return;
+      if (!force &&
+          parsed['url'] != null &&
+          (parsed['url'] as String).isNotEmpty) {
+        return;
+      }
       final key = parsed['key'];
       if (key == null) return;
       // If we've already requested a presign and not forcing, skip
       if (!force && parsed['_presignRequested'] == true) return;
-      final res = await http.get(Uri.parse('${URL.chatURL}/classes/presign-get?key=$key'), headers: {'Authorization': 'Bearer ${widget.authToken}'});
+      final res = await http.get(
+          Uri.parse('${URL.chatURL}/classes/presign-get?key=$key'),
+          headers: {'Authorization': 'Bearer ${widget.authToken}'});
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
         parsed['url'] = data['url'];
@@ -808,7 +711,8 @@ Widget _buildFilePreview(Map parsed, String messageId) {
         }
         // Avoid calling setState if widget was disposed while awaiting network
         if (!mounted) return;
-        setState(() {}); // trigger rebuild to show image (still showing base64 if present)
+        setState(
+            () {}); // trigger rebuild to show image (still showing base64 if present)
 
         // Precache the network image so the UI can swap smoothly from base64 to network image
         try {
@@ -825,11 +729,15 @@ Widget _buildFilePreview(Map parsed, String messageId) {
                 final m2 = Map.of(messages[idx2]);
                 dynamic cont2 = m2['content'];
                 if (cont2 is String) cont2 = json.decode(cont2);
-                if (cont2 is Map && (cont2['localPreviewBase64'] != null || cont2['localPath'] != null)) {
+                if (cont2 is Map &&
+                    (cont2['localPreviewBase64'] != null ||
+                        cont2['localPath'] != null)) {
                   cont2.remove('localPreviewBase64');
                   cont2.remove('localPath');
                   m2['content'] = json.encode(cont2);
-                  setState(() { messages[idx2] = m2; });
+                  setState(() {
+                    messages[idx2] = m2;
+                  });
                 }
               } catch (e) {
                 // ignore
@@ -863,31 +771,12 @@ Widget _buildFilePreview(Map parsed, String messageId) {
     }
   }
 
-  void _clearUploadingForKey(String key) {
-    // Find any messages that are optimistic (local_) and whose content.key == key
-    final toRemove = <String>[];
-    for (final m in messages) {
-      try {
-        final cid = m['_id'] as String? ?? '';
-        if (!cid.startsWith('local_')) continue;
-        final cont = m['content'] is String ? json.decode(m['content']) : m['content'];
-        if (cont is Map && cont['key'] == key) toRemove.add(cid);
-      } catch (e) { continue; }
-    }
-    if (toRemove.isEmpty) return;
-    setState(() {
-      for (final id in toRemove) {
-        uploadingKeys.remove(id);
-      }
-    });
-  }
 
   Future<void> loadUserNameIfNeeded(String userId) async {
     if (userId.isEmpty || userNamesCache.containsKey(userId)) return;
     try {
       final response = await http.get(
-        Uri.parse(
-            '${URL.chatURL}/classes/get-user-name?userId=$userId'),
+        Uri.parse('${URL.chatURL}/classes/get-user-name?userId=$userId'),
         headers: {
           'Authorization': 'Bearer ${widget.authToken}',
           'Content-Type': 'application/json',
@@ -923,127 +812,183 @@ Widget _buildFilePreview(Map parsed, String messageId) {
     final currentUserId =
         Provider.of<UserProvider>(context, listen: false).user?.id;
     final senderId = msg['sender'] ?? '';
-    print(msg);
 
-  if (senderId.isNotEmpty) {
-    loadUserNameIfNeeded(senderId);
-  }
+    if (senderId.isNotEmpty) {
+      loadUserNameIfNeeded(senderId);
+    }
 
-  // Defensive: if message content is missing or empty, don't render a bubble
-  final rawContent = msg['content'];
-  if (rawContent == null) return SizedBox.shrink();
-  if (rawContent is String && rawContent.trim().isEmpty) return SizedBox.shrink();
+    // Defensive: if message content is missing or empty, don't render a bubble
+    final rawContent = msg['content'];
+    if (rawContent == null) return SizedBox.shrink();
+    if (rawContent is String && rawContent.trim().isEmpty) {
+      return SizedBox.shrink();
+    }
 
-  final senderName = userNamesCache[senderId] ?? '?';
-  final initials = getInitials(senderName);
+    final senderName = userNamesCache[senderId] ?? '?';
+    final initials = getInitials(senderName);
 
-  final bool isMe = currentUserId != null && senderId == currentUserId;
+    final bool isMe = currentUserId != null && senderId == currentUserId;
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
     // Build the message bubble first, then wrap with GestureDetector for deletion
     final bubble = Align(
       // alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
       child: Align(
-  alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
-  child: ConstrainedBox(
-    constraints: BoxConstraints(
-      minWidth: MediaQuery.of(context).size.width * 0.32,  // 20% of screen
-      maxWidth: MediaQuery.of(context).size.width * 0.8,  // 80% of screen
-    ),
-    child: IntrinsicWidth(
-      child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: isMe ? Colors.greenAccent : Colors.grey.shade300,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Message content (text or file)
-            Builder(builder: (_) {
-              final content = msg['content'];
-              dynamic parsed = content;
-              if (content is String) {
-                try {
-                  parsed = json.decode(content);
-                } catch (e) {
-                  parsed = content;
-                }
-              }
+        alignment: isMe ? Alignment.centerRight : Alignment.centerLeft,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            minWidth: MediaQuery.of(context).size.width * 0.32, // 20% of screen
+            maxWidth: MediaQuery.of(context).size.width * 0.8, // 80% of screen
+          ),
+          child: IntrinsicWidth(
+            child: Container(
+              margin: const EdgeInsets.symmetric(vertical: 4, horizontal: 8),
+              padding: const EdgeInsets.all(12),
+              
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: isMe
+                      ? (isDarkMode
+                          ? [
+                              const Color(0xFF43A047),
+                              const Color(0xFF2E7D32)
+                            ] // Dark sent
+                          : [
+                              const Color(0xFFB2FF59),
+                              const Color(0xFF76FF03)
+                            ]) // Light sent
+                      : (isDarkMode
+                          ? [
+                              const Color(0xFF616161),
+                              const Color.fromARGB(255, 98, 98, 98)
+                            ] // Dark received
+                          : [
+                              const Color(0xFFF5F5F5),
+                              const Color(0xFFE0E0E0)
+                            ]), // Light received
+                ),
+                borderRadius: BorderRadius.only(
+                  topLeft: const Radius.circular(18),
+                  topRight: const Radius.circular(18),
+                  bottomLeft: isMe
+                      ? const Radius.circular(18)
+                      : const Radius.circular(0),
+                  bottomRight: isMe
+                      ? const Radius.circular(0)
+                      : const Radius.circular(18),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.08),
+                    blurRadius: 3,
+                    offset: const Offset(1, 2),
+                  )
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Message content (text or file)
+                  Builder(builder: (_) {
+                    final content = msg['content'];
+                    dynamic parsed = content;
+                    if (content is String) {
+                      try {
+                        parsed = json.decode(content);
+                      } catch (e) {
+                        parsed = content;
+                      }
+                    }
 
-                        if (parsed is Map && parsed['type'] == 'file') {
-                          // Pass the whole parsed map so we can handle local preview (base64) and server URL
-                          final idKey = msg['_id'] as String? ?? '';
-                          final bool isUploading = uploadingKeys.contains(idKey) || idKey.startsWith('local_');
-                          // Build file preview with uploading overlay; long-press deletion is handled
-                          // by the outer wrapper (below) which calls _attemptDeleteMessage.
-                          return Stack(
-                            children: [
-                              _buildFilePreview(parsed, idKey),
-                              if (isUploading)
-                                Positioned.fill(
-                                  child: Container(
-                                    color: Colors.black26,
-                                    child: Center(
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          CircularProgressIndicator(),
-                                          SizedBox(height: 8),
-                                          Text('Uploading...', style: TextStyle(color: Colors.white)),
-                                        ],
-                                      ),
-                                    ),
+                    if (parsed is Map && parsed['type'] == 'file') {
+                      // Pass the whole parsed map so we can handle local preview (base64) and server URL
+                      final idKey = msg['_id'] as String? ?? '';
+                      final bool isUploading = uploadingKeys.contains(idKey) ||
+                          idKey.startsWith('local_');
+                      // Build file preview with uploading overlay; long-press deletion is handled
+                      // by the outer wrapper (below) which calls _attemptDeleteMessage.
+                      return Stack(
+                        children: [
+                          _buildFilePreview(parsed, idKey),
+                          if (isUploading)
+                            Positioned.fill(
+                              child: Container(
+                                color: Colors.black26,
+                                child: Center(
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      CircularProgressIndicator(),
+                                      SizedBox(height: 8),
+                                      Text('Uploading...',
+                                          style:
+                                              TextStyle(color: Colors.white)),
+                                    ],
                                   ),
                                 ),
-                            ],
-                          );
-                        }
+                              ),
+                            ),
+                        ],
+                      );
+                    }
 
-              // fallback: plain text
-              return Text(
-                parsed is String ? parsed : (parsed?.toString() ?? ' '),
-                style: const TextStyle(fontSize: 16),
-              );
-            }),
-            const SizedBox(height: 4),
-      
-            // Bottom row: initials + timestamp
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  initials,
-                  style: const TextStyle(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black54,
-                  ),
-                ),
+                    // fallback: plain text
+                    return Text(
+                      parsed is String ? parsed : (parsed?.toString() ?? ' '),
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: isDarkMode
+                            ? Colors.white
+                            : Colors.black // dark grey for light backgrounds
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 4),
+
+                  // Bottom row: initials + timestamp
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        initials,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: isDarkMode
+                              ? Colors.white
+                              : const Color.fromARGB(255, 120, 120, 120),
+                        ),
+                      ),
                       SizedBox(width: 10),
                       Text(
-                 msg['timestamp'] != null 
-                 ? DateFormat('h:mma').format(DateTime.parse(msg['timestamp']).toLocal()).toLowerCase() : '',
-                  style: const TextStyle(
-                    fontSize: 10,
-                    color: Colors.black38,
+                        msg['timestamp'] != null
+                            ? DateFormat('h:mma')
+                                .format(
+                                    DateTime.parse(msg['timestamp']).toLocal())
+                                .toLowerCase()
+                            : '',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: isDarkMode
+                              ? Colors.white
+                              : const Color.fromARGB(255, 120, 120, 120),
+                        ),
+                      )
+                    ],
                   ),
-                )
-              ],
+                ],
+              ),
             ),
-          ],
+          ),
         ),
       ),
-    ),
-  ),
-),
-
     );
 
     // Only allow long-press delete for messages sent by the current user
     if (isMe) {
       return GestureDetector(
-        onLongPress: () => _attemptDeleteMessage(msg['_id'] as String? ?? '', msg),
+        onLongPress: () =>
+            _attemptDeleteMessage(msg['_id'] as String? ?? '', msg),
         child: bubble,
       );
     }
@@ -1067,12 +1012,14 @@ Widget _buildFilePreview(Map parsed, String messageId) {
     }
 
     final senderIdLocal = msg['sender'] ?? '';
-    final currentUserIdLocal = Provider.of<UserProvider>(context, listen: false).user?.id;
+    final currentUserIdLocal =
+        Provider.of<UserProvider>(context, listen: false).user?.id;
     if (currentUserIdLocal == null) return;
     // Only allow delete when the current user is the original sender. Server also enforces this.
     if (currentUserIdLocal != senderIdLocal) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('You do not have permission to delete this message')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('You do not have permission to delete this message')));
       return;
     }
 
@@ -1082,8 +1029,12 @@ Widget _buildFilePreview(Map parsed, String messageId) {
         title: Text('Delete message?'),
         content: Text('This will remove the message and any attached files.'),
         actions: [
-          TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: Text('Cancel')),
-          TextButton(onPressed: () => Navigator.of(ctx).pop(true), child: Text('Delete')),
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(false),
+              child: Text('Cancel')),
+          TextButton(
+              onPressed: () => Navigator.of(ctx).pop(true),
+              child: Text('Delete')),
         ],
       ),
     );
@@ -1091,7 +1042,9 @@ Widget _buildFilePreview(Map parsed, String messageId) {
     if (should != true) return;
 
     try {
-      final res = await http.delete(Uri.parse('${URL.chatURL}/classes/delete-message/${idKey}'), headers: {'Authorization': 'Bearer ${widget.authToken}'});
+      final res = await http.delete(
+          Uri.parse('${URL.chatURL}/classes/delete-message/$idKey'),
+          headers: {'Authorization': 'Bearer ${widget.authToken}'});
       if (res.statusCode == 200) {
         if (!mounted) return;
         setState(() {
@@ -1099,11 +1052,13 @@ Widget _buildFilePreview(Map parsed, String messageId) {
         });
       } else {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to delete')));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text('Failed to delete')));
       }
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Delete failed: $e')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Delete failed: $e')));
     }
   }
 
@@ -1131,67 +1086,97 @@ Widget _buildFilePreview(Map parsed, String messageId) {
             )
           ],
         ),
-        body: Column(
-          children: [
-            Expanded(
-              child: ListView.builder(
-                reverse: true,
-                itemCount: messages.length,
-                itemBuilder: (_, i) =>
-                    buildMessage(messages[messages.length - 1 - i]),
-              ),
+        body: Stack(children: [
+          Positioned.fill(
+            child: Image.asset(
+              Theme.of(context).brightness == Brightness.dark
+                  ? 'assets/images/darkChatbackground.jpg' // 🌙 Dark mode image
+                  : 'assets/images/lightChatbackground.png', // ☀️ Light mode image
+              fit: BoxFit.cover,
             ),
-            if (isTyping)
-              Padding(
-                padding: EdgeInsets.all(8),
-                child: Text('Someone is typing...',
-                    style: TextStyle(fontStyle: FontStyle.italic)),
-              ),
-            if (currentUserRole != 'student')
-              Padding(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: _controller,
-                        maxLines: null,
-                        keyboardType: TextInputType.multiline,
-                        onChanged: (val) => sendTyping(val.isNotEmpty),
-                        decoration: InputDecoration(
-                          hintText: 'Type a message',
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(16),
+          ),
+          SafeArea(
+            child: Column(
+              children: [
+                Expanded(
+                  child: ListView.builder(
+                    controller: _scrollController,
+                    reverse: true,
+                    itemCount: messages.length,
+                    itemBuilder: (_, i) =>
+                        buildMessage(messages[messages.length - 1 - i]),
+                  ),
+                ),
+                if (isTyping)
+                  Padding(
+                    padding: EdgeInsets.all(8),
+                    child: Text('Someone is typing...',
+                        style: TextStyle(fontStyle: FontStyle.italic)),
+                  ),
+                if (currentUserRole != 'student')
+                  Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                          border: Border.all(
+                            color: Colors.grey, // border color
+                            width: 1.5, // border thickness
                           ),
-                        ),
+                          borderRadius: BorderRadius.circular(29)),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: TextField(
+                              controller: _controller,
+                              maxLines: null,
+                              keyboardType: TextInputType.multiline,
+                              onChanged: (val) => sendTyping(val.isNotEmpty),
+                              style: TextStyle(color: Colors.black),
+                              decoration: InputDecoration(
+                                hintText: 'Type a message',
+                                hintStyle: const TextStyle(
+                                  color: Colors.black54
+                                ),
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(29),
+                                ),
+                                filled: true,
+                                fillColor: Colors.white
+                              ),
+                            ),
+                          ),
+                          Row(
+                            children: [
+                              IconButton(
+                                icon: Icon(Icons.attach_file),
+                                color: Colors.white,
+                                onPressed: uploadFile,
+                              ),
+                              IconButton(
+                                icon: Icon(Icons.send),
+                                color: Colors.white,
+                                onPressed: () => sendMessage(_controller.text),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
-                    Row(
-                      children: [
-                        IconButton(
-                          icon: Icon(Icons.attach_file),
-                          onPressed: uploadFile,
-                        ),
-                        IconButton(
-                          icon: Icon(Icons.send),
-                          onPressed: () => sendMessage(_controller.text),
-                        ),
-                      ],
+                  )
+                else
+                  Padding(
+                    padding: const EdgeInsets.all(16),
+                    child: Text(
+                      'You do not have permission to send messages.',
+                      style: TextStyle(color: Colors.grey),
                     ),
-                  ],
-                ),
-              )
-            else
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Text(
-                  'You do not have permission to send messages.',
-                  style: TextStyle(color: Colors.grey),
-                ),
-              ),
-          ],
+                  ),
+              ],
+            ),
+          ),
+          ]
         ),
       );
-
 }

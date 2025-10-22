@@ -241,52 +241,74 @@ class _AttendanceViewState extends State<AttendanceView> {
         padding: const EdgeInsets.all(8),
         child: Column(
           children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color.fromARGB(255, 222, 219, 219),
-                    spreadRadius: 1,
-                    blurRadius: 2,
-                    offset: const Offset(0, 2),
-                  ),
-                ],
+            DropdownButtonHideUnderline(
+              child: DropdownButton2<ClassroomModel>(
+                isExpanded: true,
+                value: _selectedClass,
+                hint: Text(
+                'Select Class',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? Colors.grey.shade400 // softer grey for dark mode
+                      : Colors.grey.shade600, // darker grey for light mode
+                ),
               ),
-              child: DropdownButtonHideUnderline(
-                child: DropdownButton2<ClassroomModel>(
-                  isExpanded: true,
-                  value: _selectedClass,
-                  hint: const Text(
-                    'Select Class',
-                    style: TextStyle(fontSize: 16, color: Colors.grey),
-                  ),
-                  items: _classes.map((cls) {
-                    return DropdownMenuItem(
-                      value: cls,
-                      child: Text(
-                        cls.name,
-                        style: const TextStyle(fontWeight: FontWeight.w500),
-                      ),
-                    );
-                  }).toList(),
-                  onChanged: (cls) {
-                    if (cls != null) {
-                      setState(() {
-                        _selectedClass = cls;
-                        _getAttendanceData();
-                      });
-                    }
-                  },
-                  dropdownStyleData: DropdownStyleData(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      color: Colors.white,
+              items: _classes.map((cls) {
+                return DropdownMenuItem(
+                  value: cls,
+                  child: Text(
+                    cls.name,
+                    style: TextStyle(
+                      fontWeight: FontWeight.w500,
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.white
+                          : Colors.black87,
                     ),
                   ),
+                );
+                }).toList(),
+                onChanged: (cls) {
+                  if (cls != null) {
+                    setState(() {
+                      _selectedClass = cls;
+                      _getAttendanceData();
+                    });
+                  }
+                },
+                buttonStyleData: ButtonStyleData(
+                height: 48,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? const Color(0xFF2A2A2A)
+                      : const Color(0xFFF7F7F7),
+                  border: Border.all(
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.grey.shade700
+                        : Colors.grey.shade300,
+                  ),
                 ),
+              ),
+               dropdownStyleData: DropdownStyleData(
+                maxHeight: 300,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  color: Theme.of(context).brightness == Brightness.dark
+                      ? const Color(0xFF1E1E1E)
+                      : Colors.white,
+                  boxShadow: [
+                    BoxShadow(
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.black45
+                          : Colors.grey.withOpacity(0.2),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+              ),
               ),
             ),
 
@@ -297,38 +319,57 @@ class _AttendanceViewState extends State<AttendanceView> {
                 _pickDate();
               },
               child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color.fromARGB(255, 222, 219, 219),
-                      spreadRadius: 1,
-                      blurRadius: 2,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Icon(Icons.calendar_today, color: Colors.grey),
-                    Text(
-                      '${selectedDate.day.toString().padLeft(2, '0')} '
-                      '${_monthName(selectedDate.month)} '
-                      '${selectedDate.year}',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const Icon(Icons.arrow_drop_down,
-                        color: Color.fromARGB(255, 84, 83, 83)),
-                  ],
-                ),
-              ),
+  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+  decoration: BoxDecoration(
+    color: Theme.of(context).brightness == Brightness.dark
+        ? const Color(0xFF2A2A2A) // dark card background
+        : const Color(0xFFF7F7F7),
+    borderRadius: BorderRadius.circular(12),
+    border: Border.all(
+      color: Theme.of(context).brightness == Brightness.dark
+          ? Colors.grey.shade700
+          : Colors.grey.shade300,
+    ),
+    boxShadow: [
+      if (Theme.of(context).brightness == Brightness.light)
+        BoxShadow(
+          color: Colors.grey.withOpacity(0.15),
+          blurRadius: 6,
+          offset: const Offset(0, 3),
+        ),
+    ],
+  ),
+  child: Row(
+    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+    children: [
+      Icon(
+        Icons.calendar_today,
+        color: Theme.of(context).brightness == Brightness.dark
+            ? Colors.grey.shade400
+            : Colors.grey.shade600,
+      ),
+      Text(
+        '${selectedDate.day.toString().padLeft(2, '0')} '
+        '${_monthName(selectedDate.month)} '
+        '${selectedDate.year}',
+        style: TextStyle(
+          fontSize: 16,
+          fontWeight: FontWeight.w500,
+          color: Theme.of(context).brightness == Brightness.dark
+              ? Colors.white
+              : Colors.black87,
+        ),
+      ),
+      Icon(
+        Icons.arrow_drop_down,
+        color: Theme.of(context).brightness == Brightness.dark
+            ? Colors.grey.shade400
+            : const Color.fromARGB(255, 84, 83, 83),
+      ),
+    ],
+  ),
+)
+
             ),
 
             const SizedBox(height: 16),
