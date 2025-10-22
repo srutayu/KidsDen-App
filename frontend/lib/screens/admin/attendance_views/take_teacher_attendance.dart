@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:frontend/controllers/attendance_controller.dart';
 import 'package:frontend/controllers/classroom_controller.dart';
 import 'package:frontend/models/classroom_model.dart';
 import 'package:frontend/provider/auth_provider.dart';
@@ -18,12 +19,15 @@ class _TakeTeacherAttendanceState extends State<TakeTeacherAttendance> {
   List<ClassroomModel> _teachers = [];
   Map<String, String> _attendance = {}; 
   bool _loading = true;
+  bool _attendanceTaken= false;
+
 
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     token = Provider.of<AuthProvider>(context, listen: false).token!;
     _initializeData();
+    _checkAttendanceStatus();
   }
 
   Future<void> _initializeData() async {
@@ -81,7 +85,58 @@ class _TakeTeacherAttendanceState extends State<TakeTeacherAttendance> {
   }
 }
 
+Future<void> _checkAttendanceStatus() async {
+  setState(() => _loading = true);
+
+  try {
+    // Call your controller method
+    final attendanceTaken = await AttendanceController.checkTeacherAttendance(
+      token: token,
+    );
+
+    setState(() {
+      _attendanceTaken = attendanceTaken; // store the result in your state
+      _loading = false;
+    });
+  } catch (e) {
+    setState(() => _loading = false);
+    _showError('Failed to check attendance: $e');
+  }
+}
+
   Widget _buildTeacherList() {
+     if (_attendanceTaken) {
+    return Card(
+      elevation: 2,
+      margin: const EdgeInsets.all(12),
+      child: SizedBox(
+        height: 250,
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(
+                Icons.cancel_rounded,
+                color: Colors.redAccent,
+                size: 64,
+              ),
+              const SizedBox(height: 12),
+              Text(
+                'Attendance taken for ${DateFormat('dd/MM/yyyy').format(DateTime.now())}',
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 16,
+                  color: Colors.black87,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   return Card(
     child: SingleChildScrollView(
       child: Padding(
@@ -143,6 +198,7 @@ class _TakeTeacherAttendanceState extends State<TakeTeacherAttendance> {
                   ),
                 );
               }),
+            ElevatedButton(onPressed: _submitAttendance, child: Text('Submit'))
           ],
         ),
       ),
@@ -162,7 +218,6 @@ class _TakeTeacherAttendanceState extends State<TakeTeacherAttendance> {
             child: Column(children: [
               const SizedBox(height: 10),
               Expanded(child: _buildTeacherList()),
-              ElevatedButton(onPressed: _submitAttendance, child: Text('Submit'))
             ])));
   }
 }
