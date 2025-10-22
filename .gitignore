@@ -4,9 +4,10 @@
 README.md
 *.md
 
-/chatbackend/.env
-/backend/.env
+chatbackend/.env
+backend/.env
 
 logs
 .vscode
-chatbackend/.env
+frontend/lib/constants/url.dart
+

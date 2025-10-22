@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:frontend/constants/url.dart';
+import 'package:frontend/screens/widgets/toast_message.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 
@@ -43,7 +44,15 @@ class _BroadcastScreenState extends State<BroadcastScreen> {
 
   Future<void> sendBroadcast() async {
     final msg = _msgController.text.trim();
-    if (msg.isEmpty || selectedClassIds.isEmpty) return;
+    if (msg.isEmpty ){
+      showToast('No message composed');
+      return;
+    }
+    else if (selectedClassIds.isEmpty){
+      showToast('No classes selected');
+      return;
+    }
+     
 
     setState(() => isSending = true);
 
@@ -64,15 +73,11 @@ class _BroadcastScreenState extends State<BroadcastScreen> {
     setState(() => isSending = false);
 
     if (response.statusCode == 200) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Message sent to selected classes.')),
-      );
+      showToast('Message sent to selected classes.');
       _msgController.clear();
       selectedClassIds.clear();
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Failed to send broadcast.')),
-      );
+      showToast('Failed to send Broadcast');
     }
   }
 
