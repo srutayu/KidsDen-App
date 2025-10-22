@@ -122,13 +122,15 @@ Future<void> _checkAttendanceStatus() async {
               ),
               const SizedBox(height: 12),
               Text(
-                'Attendance taken for ${DateFormat('dd/MM/yyyy').format(DateTime.now())}',
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  fontSize: 16,
-                  color: Colors.black87,
-                  fontWeight: FontWeight.w600,
-                ),
+                  'Attendance taken for ${DateFormat('dd/MM/yyyy').format(DateTime.now())}',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.white
+                        : Colors.black87,
+                    fontWeight: FontWeight.w600,
+                  ),
               ),
             ],
           ),

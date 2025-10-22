@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:frontend/constants/url.dart';
 import 'package:frontend/provider/user_data_provider.dart';
@@ -16,7 +15,7 @@ import 'package:socket_io_client/socket_io_client.dart' as IO;
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:video_thumbnail/video_thumbnail.dart';
+
 
 
 class ChatScreen extends StatefulWidget {
@@ -75,17 +74,17 @@ class _ChatScreenState extends State<ChatScreen> {
 void _handleScroll() {
   final pos = _scrollController.position;
 
-  // --- 1️⃣ Detect when user reaches top (to load older messages) ---
-  if (pos.pixels >= pos.maxScrollExtent - 200) {
-    print('⬆️ Near top of the list — load older messages');
-    // _loadOlderMessages();
-  }
+  // // --- 1️⃣ Detect when user reaches top (to load older messages) ---
+  // if (pos.pixels >= pos.maxScrollExtent - 200) {
+  //   print('⬆️ Near top of the list — load older messages');
+  //   // _loadOlderMessages();
+  // }
 
-  // --- 2️⃣ Detect when user is near bottom (new messages area) ---
-  if (pos.pixels <= 200) {
-    print('⬇️ Near bottom of the list — newest messages zone');
-    // could auto-scroll to bottom or mark read, etc.
-  }
+  // // --- 2️⃣ Detect when user is near bottom (new messages area) ---
+  // if (pos.pixels <= 200) {
+  //   print('⬇️ Near bottom of the list — newest messages zone');
+  //   // could auto-scroll to bottom or mark read, etc.
+  // }
 
   // --- 3️⃣ Preload next and previous few images ---
   final double offset = pos.pixels;
@@ -446,6 +445,19 @@ Widget _buildFilePreview(Map parsed, String messageId) {
     return FutureBuilder<bool>(
       future: FileUtils.fileExists(name),
       builder: (context, snapshot) {
+    if (snapshot.connectionState == ConnectionState.waiting) {
+      // 👇 while the async call is still running
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
+    }
+
+    if (snapshot.hasError) {
+      return const Text('Error checking file');
+    }
+
+    if (snapshot.hasData && (snapshot.data == true || snapshot.data == false)) {
+       {
         final exists = snapshot.data ?? false;
         final fileFuture = exists ? FileUtils.getLocalFilePath(name) : null;
 
@@ -464,8 +476,9 @@ Widget _buildFilePreview(Map parsed, String messageId) {
                         future: fileFuture,
                         builder: (context, snap) {
                           if (!snap.hasData) {
-                            return const SizedBox(
+                            return SizedBox(
                               height: 160,
+                              width: MediaQuery.of(context).size.width * 0.32,
                               child: Center(child: CircularProgressIndicator()),
                             );
                           }
@@ -473,6 +486,7 @@ Widget _buildFilePreview(Map parsed, String messageId) {
                             image: LocalImageCache.get(snap.data!),
                             fit: BoxFit.cover,
                             height: 160,
+                            width: MediaQuery.of(context).size.width * 0.32,
                           );
                         },
                       )
@@ -528,8 +542,9 @@ Widget _buildFilePreview(Map parsed, String messageId) {
                         future: FileUtils.getVideoThumbnail(exists, url, name),
                         builder: (context, snap) {
                           if (!snap.hasData) {
-                            return const SizedBox(
+                            return SizedBox(
                               height: 160,
+                              width: MediaQuery.of(context).size.width * 0.32,
                               child: Center(child: CircularProgressIndicator()),
                             );
                           }
@@ -540,6 +555,7 @@ Widget _buildFilePreview(Map parsed, String messageId) {
                                 File(snap.data!),
                                 fit: BoxFit.cover,
                                 height: 160,
+                                width: MediaQuery.of(context).size.width * 0.32,
                               ),
                               const Icon(Icons.play_circle_outline,
                                   size: 56, color: Colors.white70),
@@ -666,7 +682,12 @@ Widget _buildFilePreview(Map parsed, String messageId) {
                 )
               : preview,
         );
-      },
+      }
+    } else {
+      // 👇 file does not exist
+      return const Text('❌ File missing');
+    }
+  },
     );
   }
 
