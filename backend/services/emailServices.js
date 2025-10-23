@@ -58,8 +58,26 @@ const sendAccountApprovalEmail = async (toEmail, studentName) => {
   }
 };
 
+const sendPasswordOtpEmail = async (toEmail, otp, expiresMinutes = 5) => {
+  const mailOptions = {
+    from: `"School Admin" <${process.env.EMAIL_USER}>`,
+    to: toEmail,
+    subject: 'OTP to change password - School Management System',
+    text: `Your OTP to change password is ${otp}. It will expire in ${expiresMinutes} minutes. If you did not request this, please ignore this message.`,
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`Password OTP email sent to ${toEmail}`);
+  } catch (error) {
+    console.error('Error sending password OTP email:', error);
+    throw error;
+  }
+};
+
 module.exports = {
   sendPaymentConfirmationEmail,
   accountCreatedConfirmationEmail,
   sendAccountApprovalEmail
+  , sendPasswordOtpEmail
 };
