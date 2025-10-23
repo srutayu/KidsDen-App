@@ -3,6 +3,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:frontend/controllers/auth_controller.dart';
 import 'package:frontend/provider/auth_provider.dart';
 import 'package:frontend/screens/admin/attendance_views/admin_attendance.dart';
+import 'package:frontend/screens/admin/daily_update.dart';
 import 'package:frontend/screens/auth/onboarding_page.dart';
 import 'package:provider/provider.dart';
 
@@ -56,6 +57,18 @@ class _MyDrawerState extends State<MyDrawer> {
             title: const Text('Home'),
             onTap: () {
               Navigator.pop(context); // closes the drawer
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.campaign),
+            title: const Text('Daily Update/Broadcast'),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const DailyClassUpdatePage(),
+                ),
+              );
             },
           ),
           ListTile(

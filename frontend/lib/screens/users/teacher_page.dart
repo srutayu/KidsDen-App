@@ -6,6 +6,7 @@ import 'package:frontend/provider/themeProvider.dart';
 import 'package:frontend/provider/user_data_provider.dart';
 import 'package:frontend/screens/admin/attendance_views/view_student_attendance.dart';
 import 'package:frontend/screens/auth/onboarding_page.dart';
+import 'package:frontend/screens/chat/broadcast_screen.dart';
 import 'package:frontend/screens/chat/classlist.dart';
 import 'package:frontend/screens/teacher/attendance_page.dart';
 import 'package:frontend/screens/teacher/classroom_details.dart';
@@ -22,6 +23,7 @@ class TeacherPage extends StatefulWidget {
 class _TeacherPageState extends State<TeacherPage> {
   late final token = Provider.of<AuthProvider>(context, listen: false).token!;
   late final userId = Provider.of<UserProvider>(context, listen: false).user!.id;
+  late final userRole =  Provider.of<UserProvider>(context, listen: false).user!.role;
   final storage= FlutterSecureStorage();
   int selectedIndex = 0;
   late List<Widget> _pages;
@@ -34,6 +36,7 @@ class _TeacherPageState extends State<TeacherPage> {
       ClassroomDetailsTeacher(),
       AttendancePage(),
       AttendanceView(),
+      BroadcastScreen(authToken: token, userId: userId, userRole: userRole)
     ];
   }
 
@@ -107,7 +110,8 @@ class _TeacherPageState extends State<TeacherPage> {
             BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Class Chats'),
             BottomNavigationBarItem(icon: Icon(Icons.school), label: 'Students'),
             BottomNavigationBarItem(icon: Icon(Icons.list), label: 'Attendance'),
-            BottomNavigationBarItem(icon: Icon(Icons.history), label: 'View Attendance')
+            BottomNavigationBarItem(icon: Icon(Icons.history), label: 'View Attendance'),
+            BottomNavigationBarItem(icon: Icon(Icons.campaign), label: "Broadcast")
           ],
         ),
       ),

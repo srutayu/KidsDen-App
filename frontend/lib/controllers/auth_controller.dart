@@ -9,12 +9,12 @@ import 'dart:convert';
 class AuthController {
   static final _baseURL = URL.baseURL;
 
-  static Future<bool>register(String name, String email, String password, String role) async {
+  static Future<bool>register(String name, String email, String password, String role, String phone) async {
     final url = Uri.parse('$_baseURL/auth/register');
     final response = await http.post(url,
       headers: {'Content-Type':'application/json'},
       body: jsonEncode({
-        "name":name, "email":email,"password":password, "role":role
+        "name":name, "email":email,"password":password, "role":role, "phone": phone
       })
     );
     // Map<String, dynamic> jsonMap = json.decode(response.body);
