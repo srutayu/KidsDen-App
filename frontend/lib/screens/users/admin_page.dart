@@ -1,11 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:frontend/controllers/auth_controller.dart';
 import 'package:frontend/provider/auth_provider.dart';
 import 'package:frontend/screens/admin/classroom_details.dart';
 import 'package:frontend/screens/admin/member_request.dart';
 import 'package:frontend/screens/admin/payment_records.dart';
-import 'package:frontend/screens/auth/onboarding_page.dart';
+// removed unused imports
 import 'package:frontend/screens/chat/classlist.dart';
 import 'package:frontend/screens/widgets/drawer.dart';
 import 'package:frontend/screens/widgets/exitDialog.dart';
@@ -37,24 +36,7 @@ class _AdminPageState extends State<AdminPage> {
       CombinedFeesPaymentsPage(),
     ];
   }
-  Future<void> _handleLogout() async {
-    try {
-      await storage.deleteAll();
-      final value = await AuthController.logout(token);
-      if (value) {
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => const OnboardingPage(),
-          ),
-        );
-      } else {
-        print("Logout Failed");
-      }
-    } catch (error) {
-      print("Logout Error: $error");
-    }
-  }
+  // Logout handled by the drawer's logout action; helper removed to avoid unused warning.
 
     Future<void> _handleBackPressed(bool didPop, Object? result) async {
     if (selectedIndex == 1 || selectedIndex == 2 || selectedIndex == 3) {

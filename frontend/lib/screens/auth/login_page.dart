@@ -6,6 +6,7 @@ import 'package:frontend/provider/auth_provider.dart';
 import 'package:frontend/provider/user_data_provider.dart';
 import 'package:frontend/screens/auth/approval_pending.dart';
 import 'package:frontend/screens/auth/signup_page.dart';
+import 'package:frontend/screens/auth/change_password.dart';
 import 'package:frontend/screens/users/admin_page.dart';
 import 'package:frontend/screens/users/student_page.dart';
 import 'package:frontend/screens/users/teacher_page.dart';
@@ -95,85 +96,96 @@ class _LoginPageState extends State<LoginPage> {
                     const SizedBox(height: 20),
                     SizedBox(
                       width: double.infinity,
-                      child: FilledButton(onPressed: () async {
-                        try {
-                          bool isApproved =
-                              await AuthController.checkIfAproved(_email.text);
-                      
-                          if (!isApproved) {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => ApprovalPending()),
-                            );
-                            return;
-                          }
-                      
-                          final loginResponse = await AuthController.login(
-                            _email.text,
-                            _password.text,
-                          );
-                      
-                          String? role = loginResponse?.user.role;
-                          String? token = loginResponse?.token;
+                      child: FilledButton(
+                        onPressed: () async {
+                          try {
+                            bool isApproved = await AuthController.checkIfAproved(_email.text);
 
-                          final storage= const FlutterSecureStorage();
-                      
-                          Provider.of<AuthProvider>(context, listen: false)
-                              .setToken(token!);
-                          await storage.write(key: 'token', value:  token);
-                          print('token is');
-                          print( await storage.read(key: 'token'));
-                          Provider.of<UserProvider>(context, listen: false)
-                              .fetchUserDetails(_email.text, token);
-                          await storage.write(key: 'email', value: _email.text);
-                      
-                          if (role == 'admin') {
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(builder: (_) => AdminPage()),
+                            if (!isApproved) {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(builder: (_) => ApprovalPending()),
+                              );
+                              return;
+                            }
+
+                            final loginResponse = await AuthController.login(
+                              _email.text,
+                              _password.text,
                             );
-                          } else if (role == 'teacher') {
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(builder: (_) => TeacherPage()),
-                            );
-                          } else if (role == 'student') {
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(builder: (_) => StudentPage()),
+
+                            String? role = loginResponse?.user.role;
+                            String? token = loginResponse?.token;
+
+                            final storage = const FlutterSecureStorage();
+
+                            Provider.of<AuthProvider>(context, listen: false).setToken(token!);
+                            await storage.write(key: 'token', value: token);
+                            Provider.of<UserProvider>(context, listen: false).fetchUserDetails(_email.text, token);
+                            await storage.write(key: 'email', value: _email.text);
+
+                            if (role == 'admin') {
+                              Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => AdminPage()));
+                            } else if (role == 'teacher') {
+                              Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => TeacherPage()));
+                            } else if (role == 'student') {
+                              Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => StudentPage()));
+                            }
+                          } catch (e) {
+                            Fluttertoast.showToast(
+                              msg: e.toString().replaceFirst("Exception: ", ""),
+                              toastLength: Toast.LENGTH_SHORT,
+                              gravity: ToastGravity.BOTTOM,
+                              textColor: Colors.white,
+                              fontSize: 16.0,
                             );
                           }
-                        } catch (e) {
-                          Fluttertoast.showToast(
-                            msg: e.toString().replaceFirst("Exception: ", ""),
-                            toastLength: Toast.LENGTH_SHORT,
-                            gravity: ToastGravity.BOTTOM,
-                            textColor: Colors.white,
-                            fontSize: 16.0,
-                          );
-                        }
-                      }, child: Text('Login')),
-                    ),
-                    SizedBox(
-                      height: 20,
-                    ),
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(builder: (context) {
-                            return SignUpPage();
-                          },)
-                        );
-                      },
-                      child: Text(
-                        'Not registered? Sign up.',
-                        style: TextStyle(
-                          color: Colors.blue,
-                          decoration: TextDecoration.underline,
-                        ),
+                        },
+                        child: const Text('Login'),
                       ),
-                    )
+                    ),
+                    const SizedBox(height: 20),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: TextButton(
+                              onPressed: () {
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(builder: (context) => SignUpPage()),
+                                );
+                              },
+                              style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                              child: const Text(
+                                'Not registered? Sign up.',
+                                style: TextStyle(
+                                  color: Colors.blue,
+                                  decoration: TextDecoration.underline,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            onPressed: () {
+                              Navigator.push(context, MaterialPageRoute(builder: (_) => const ChangePasswordPage()));
+                            },
+                            style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                            child: const Text(
+                              'Forgot / Change Password',
+                              style: TextStyle(
+                                color: Colors.blue,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
                   ],
                 ),
               ),

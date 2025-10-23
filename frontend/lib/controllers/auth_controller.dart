@@ -1,5 +1,6 @@
 
 import 'package:frontend/constants/url.dart';
+import 'package:flutter/foundation.dart';
 import 'package:frontend/models/login_response.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -40,7 +41,7 @@ class AuthController {
         return LoginResponse.fromJson(jsonMap);
       } else if (jsonMap.containsKey('message')) {
         // Handle error message (e.g., user already logged in)
-        print('Login error: ${jsonMap['message']}');
+    debugPrint('Login error: ${jsonMap['message']}');
         // You can throw an exception or return null, or wrap in a result type
         return null;
       }
@@ -51,7 +52,7 @@ class AuthController {
       throw Exception(errorMessage);
     }
 
-    print('Unexpected response or error: ${response.statusCode} ${response.body}');
+  debugPrint('Unexpected response or error: ${response.statusCode} ${response.body}');
     return null;
   }
 

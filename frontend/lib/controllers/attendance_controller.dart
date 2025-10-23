@@ -12,8 +12,8 @@ class AttendanceController {
     required String classId,
     required DateTime date,
   }) async {
-    final formattedDate = date.toIso8601String();
-    final url = Uri.parse('$_baseURL/adminteacher/get-attendance?classId=${classId}&date=${formattedDate}');
+  final formattedDate = date.toIso8601String();
+  final url = Uri.parse('$_baseURL/adminteacher/get-attendance?classId=$classId&date=$formattedDate');
 
     final response = await http.get(
       url,
@@ -49,9 +49,9 @@ class AttendanceController {
     required String token,
     required DateTime date,
   }) async {
-    final formattedDate = DateFormat('MM-dd-yyyy').format(date);
-    final url = Uri.parse('$_baseURL/admin/get-teacher-attendance?date=${formattedDate}');
-    print(url);
+  final formattedDate = DateFormat('MM-dd-yyyy').format(date);
+  final url = Uri.parse('$_baseURL/admin/get-teacher-attendance?date=$formattedDate');
+  // debugPrint(url.toString());
     final response = await http.get(
       url,
       headers: {
