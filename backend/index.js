@@ -60,6 +60,7 @@ if (cluster.isMaster) {
     app.use('/api/teacher', require('./routes/teacherRoutes'));
     app.use('/api/adminteacher', require('./routes/adminteacherRoutes'));
     app.use('/api/adminstudent', require('./routes/adminStudentRoutes'));
+    app.use('/api/whatsapp', require('./routes/whatsappRoutes'));
 
     app.use(errorHandler);
 

@@ -2,6 +2,7 @@ const razorpay = require("../config/razorpay");
 const Payment = require("../models/paymentModel");
 const User = require("../models/userModel");
 const {sendPaymentConfirmationEmail} = require("../services/emailServices");
+const { sendWhatsAppMessage } = require('../services/whatsappService');
 const Fees = require("../models/feesModel");
 const Class = require("../models/classModel");
 
@@ -98,6 +99,16 @@ exports.verifyPayment = async (req, res) => {
         amount,
         payment.updatedAt
       );
+      // send Whatsapp confirmation if phone is available
+      try {
+        if (student.phone) {
+          const phone = student.phone.startsWith('whatsapp:') ? student.phone : student.phone;
+          const msg = `Payment received: Hi ${student.name}, we received your payment of INR ${amount} on ${payment.updatedAt.toLocaleDateString()}. Thank you!`;
+          await sendWhatsAppMessage(phone, msg);
+        }
+      } catch (e) {
+        console.error('WhatsApp send error (verifyPayment):', e && e.message ? e.message : e);
+      }
     } else {
       console.warn('Student not found for payment confirmation email');
     }
@@ -253,6 +264,12 @@ exports.updatePaymentRecordForOfflinePayment = async (req, res) => {
       fees.amount,
       payment.updatedAt
     ).catch(e => console.error('Email send error:', e));
+    // send whatsapp confirmation asynchronously
+    if (student && student.phone) {
+      const phone = student.phone.startsWith('whatsapp:') ? student.phone : student.phone;
+      const msg = `Payment received: Hi ${student.name}, we received your payment of INR ${fees.amount} on ${payment.updatedAt.toLocaleDateString()}. Thank you!`;
+      sendWhatsAppMessage(phone, msg).catch(e => console.error('WhatsApp send error (offline):', e && e.message ? e.message : e));
+    }
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Could not update payment record' });
