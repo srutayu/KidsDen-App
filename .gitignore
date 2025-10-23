@@ -4,7 +4,6 @@
 README.md
 *.md
 
-/chatbackend/.env
-/backend/.env
+*.env
 
 logs
