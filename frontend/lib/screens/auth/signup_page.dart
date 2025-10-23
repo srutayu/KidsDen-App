@@ -3,6 +3,7 @@ import 'package:fluttertoast/fluttertoast.dart';
 import 'package:frontend/controllers/auth_controller.dart';
 import 'package:frontend/screens/auth/approval_pending.dart';
 import 'package:frontend/screens/auth/login_page.dart';
+import 'package:frontend/screens/auth/change_password.dart';
 
 class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key});
@@ -292,25 +293,43 @@ class _SignUpPageState extends State<SignUpPage> {
                                   ),
                                 ),
                                 SizedBox(height: 20),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
+                                Wrap(
+                                  alignment: WrapAlignment.center,
+                                  spacing: 8,
+                                  runSpacing: 4,
                                   children: [
-                                    Text("Already have an account? "),
-                                    GestureDetector(
-                                      onTap: () {
+                                    const Text("Already have an account? "),
+                                    TextButton(
+                                      onPressed: () {
                                         Navigator.pushReplacement(
                                           context,
                                           MaterialPageRoute(
-                                            builder: (context) =>
-                                                LoginPage(), 
+                                            builder: (context) => LoginPage(),
                                           ),
                                         );
                                       },
-                                      child: Text(
+                                      style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                                      child: const Text(
                                         "Log In",
                                         style: TextStyle(
                                           color: Colors.blue,
                                           fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                    TextButton(
+                                      onPressed: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(builder: (_) => const ChangePasswordPage()),
+                                        );
+                                      },
+                                      style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                                      child: const Text(
+                                        'Forgot / Change Password',
+                                        style: TextStyle(
+                                          color: Colors.blue,
+                                          decoration: TextDecoration.underline,
                                         ),
                                       ),
                                     ),

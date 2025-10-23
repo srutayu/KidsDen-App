@@ -2,7 +2,8 @@ const User = require('../models/userModel');
 const redisClient = require('../config/redisClient');
 const generateToken = require('../utils/generateToken');
 const jwt = require('jsonwebtoken');
-const { accountCreatedConfirmationEmail } = require('../services/emailServices');
+const { accountCreatedConfirmationEmail, sendPasswordOtpEmail } = require('../services/emailServices');
+const { sendWhatsAppMessage } = require('../services/whatsappService');
 require('dotenv').config();
 
 //TODO: Register User
@@ -197,5 +198,126 @@ exports.getRoleAndTimefromToken = (req, res) => {
     } catch (error) {
         console.error(error);
         return res.status(401).json({ message: 'Invalid token' });
+    }
+};
+
+// ===== Password reset / change using OTP over WhatsApp =====
+// POST /api/auth/password/request-otp   { email }
+exports.requestPasswordOtp = async (req, res) => {
+    try {
+        const { email } = req.body;
+        if (!email) return res.status(400).json({ message: 'Email is required' });
+
+        const user = await User.findOne({ email });
+        if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const phone = user.phone || null; // if no phone, we'll send OTP via email only
+
+        // Generate 6-digit OTP
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+        // Store OTP in Redis with 5 minute expiry
+        const otpKey = `pwd_otp:${user._id}`;
+        await redisClient.set(otpKey, otp, 'EX', 300);
+
+        const message = `Your OTP to change password is ${otp}. It will expire in 5 minutes.`;
+
+        // Try WhatsApp only if phone exists
+        let waSuccess = false;
+        let emailSuccess = false;
+
+        if (phone) {
+            try {
+                // Prepare phone in E.164. If phone looks like 10 digits, assume +91 (India) as fallback.
+                let to = phone;
+                if (!to.startsWith('+')) {
+                    if (/^\d{10}$/.test(to)) {
+                        to = `+91${to}`;
+                    } else {
+                        to = `+${to}`;
+                    }
+                }
+                await sendWhatsAppMessage(to, message);
+                waSuccess = true;
+            } catch (sendErr) {
+                console.error('[Auth] Failed to send OTP via WhatsApp:', sendErr);
+            }
+        }
+
+        // Always try email
+        try {
+            await sendPasswordOtpEmail(email, otp, 5);
+            emailSuccess = true;
+        } catch (emailErr) {
+            console.error('[Auth] Failed to send OTP via Email:', emailErr);
+        }
+
+        if (!waSuccess && !emailSuccess) {
+            return res.status(500).json({ message: 'Failed to send OTP via both WhatsApp and Email' });
+        }
+
+        return res.status(200).json({ message: 'OTP sent', via: { whatsapp: waSuccess, email: emailSuccess } });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Server error generating OTP' });
+    }
+};
+
+// POST /api/auth/password/verify-otp  { email, otp }
+exports.verifyPasswordOtp = async (req, res) => {
+    try {
+        const { email, otp } = req.body;
+        if (!email || !otp) return res.status(400).json({ message: 'Email and OTP are required' });
+
+        const user = await User.findOne({ email });
+        if (!user) return res.status(404).json({ message: 'User not found' });
+
+        const otpKey = `pwd_otp:${user._id}`;
+        const stored = await redisClient.get(otpKey);
+        if (!stored) return res.status(400).json({ message: 'OTP expired or not found' });
+
+        if (stored !== otp.toString()) {
+            return res.status(400).json({ message: 'Invalid OTP' });
+        }
+
+        // Mark as verified for a short window
+        const verifiedKey = `pwd_otp_verified:${user._id}`;
+        await redisClient.set(verifiedKey, '1', 'EX', 600); // 10 minutes
+
+        // delete the otp key
+        await redisClient.del(otpKey);
+
+        return res.status(200).json({ message: 'OTP verified' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Server error verifying OTP' });
+    }
+};
+
+// POST /api/auth/password/change  { email, newPassword }
+exports.changePasswordWithOtp = async (req, res) => {
+    try {
+        const { email, newPassword } = req.body;
+        if (!email || !newPassword) return res.status(400).json({ message: 'Email and newPassword are required' });
+        if (newPassword.length < 6) return res.status(400).json({ message: 'Password must be at least 6 characters' });
+
+        const user = await User.findOne({ email });
+        if (!user) return res.status(404).json({ message: 'User not found' });
+
+        const verifiedKey = `pwd_otp_verified:${user._id}`;
+        const verified = await redisClient.get(verifiedKey);
+        if (!verified) return res.status(403).json({ message: 'OTP not verified or verification expired' });
+
+        // Update password (pre-save hook will hash)
+        user.password = newPassword;
+        await user.save();
+
+        // Cleanup verification flag
+        await redisClient.del(verifiedKey);
+
+        res.status(200).json({ message: 'Password changed successfully' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: 'Server error changing password' });
     }
 };
