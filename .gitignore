@@ -7,3 +7,6 @@ README.md
 *.env
 
 logs
+.vscode
+frontend/lib/constants/url.dart
+

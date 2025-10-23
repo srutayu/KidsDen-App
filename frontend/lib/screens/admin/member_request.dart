@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:frontend/controllers/admin_user_request_controller.dart';
 import 'package:frontend/models/user_request_model.dart';
 import 'package:frontend/provider/auth_provider.dart';
+import 'package:frontend/screens/widgets/toast_message.dart';
 import 'package:provider/provider.dart';
 
 class MemberRequest extends StatefulWidget {
@@ -55,7 +56,7 @@ class _MemberRequestState extends State<MemberRequest> {
 
     return Scaffold(
       appBar: AppBar(
-        // automaticallyImplyLeading: false,
+        automaticallyImplyLeading: false,
           title: Text("Member Requests")
       ),
       body: Column(
@@ -79,10 +80,10 @@ class _MemberRequestState extends State<MemberRequest> {
           children: [
             // Row 1: Name + Role
             Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
                 Text(
-                  user.name,
+                  "Name: ${user.name}",
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
@@ -90,10 +91,10 @@ class _MemberRequestState extends State<MemberRequest> {
                 ),
                 const SizedBox(width: 20),
                 Text(
-                  user.role[0].toUpperCase() + user.role.substring(1),
+                  "Role: ${user.role[0].toUpperCase() + user.role.substring(1)}",
                   style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w900,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
               ],
@@ -113,7 +114,7 @@ class _MemberRequestState extends State<MemberRequest> {
                       token,
                     ).then((value) {
                       if (value) {
-                        print("User Approved successfully");
+                        showToast('${user.name} Approved');
                         setState(() {
                           _requests.removeWhere((element) => element.id == user.id);
                         });
@@ -197,7 +198,7 @@ class _MemberRequestState extends State<MemberRequest> {
                   // print("Approving All the Requests");
                   AdminRequestController.approveAllUser(token).then((value) {
                     if(value) {
-                      print("All requests are approved");
+                      showToast("All requests are approved");
                       setState(() {
                         _requests.clear();
                       });
@@ -217,7 +218,7 @@ class _MemberRequestState extends State<MemberRequest> {
                   // print("Rejecting All the Requests");
                   AdminRequestController.rejectAllUsers(token).then((value) {
                     if(value){
-                      print("All Requests are rejected");
+                      showToast("All requests are rejected");
                       setState(() {
                         _requests.clear();
                       });

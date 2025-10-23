@@ -45,6 +45,81 @@ class AttendanceController {
     }
   }
 
+  static Future<bool> checkAttendance({
+  required String token,
+  required String classId,
+}) async {
+  // 🕒 Automatically use today's date
+  final now = DateTime.now();
+
+  // Format date as DD-MM-YYYY (since your API expects this)
+  final formattedDate =
+    '${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}-${now.year}';
+
+
+  final url = Uri.parse(
+      '$_baseURL/adminteacher/check-attendance?classId=$classId&date=$formattedDate');
+
+  final response = await http.get(
+    url,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $token',
+    },
+  );
+
+  if (response.statusCode == 200) {
+    final Map<String, dynamic> body = jsonDecode(response.body);
+
+    if (body.containsKey('attendance_taken')) {
+      return body['attendance_taken'] == true;
+    } else {
+      throw Exception('Invalid response: missing "attendance_taken" key');
+    }
+  } else {
+    throw Exception(
+      'Error checking attendance: ${response.statusCode} - ${response.body}',
+    );
+  }
+}
+
+  static Future<bool> checkTeacherAttendance({
+  required String token,
+}) async {
+  // 🕒 Automatically use today's date
+  final now = DateTime.now();
+
+  // Format date as DD-MM-YYYY (since your API expects this)
+  final formattedDate =
+    '${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}-${now.year}';
+
+
+  final url = Uri.parse(
+      '$_baseURL/adminteacher/check-teacher-attendance?date=$formattedDate');
+
+  final response = await http.get(
+    url,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $token',
+    },
+  );
+
+  if (response.statusCode == 200) {
+    final Map<String, dynamic> body = jsonDecode(response.body);
+
+    if (body.containsKey('attendance_taken')) {
+      return body['attendance_taken'] == true;
+    } else {
+      throw Exception('Invalid response: missing "attendance_taken" key');
+    }
+  } else {
+    throw Exception(
+      'Error checking attendance: ${response.statusCode} - ${response.body}',
+    );
+  }
+}
+
   static Future<List<Map<String, dynamic>>> getTeacherAttendance({
     required String token,
     required DateTime date,

@@ -1,8 +1,10 @@
 import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:flutter/material.dart';
+import 'package:frontend/controllers/attendance_controller.dart';
 import 'package:frontend/controllers/teacher_controller.dart';
 import 'package:frontend/models/classroom_model.dart';
 import 'package:frontend/provider/auth_provider.dart';
+import 'package:frontend/screens/widgets/toast_message.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
@@ -21,6 +23,7 @@ class _AttendancePageState extends State<AttendancePage> {
   List<ClassroomModel> _classes = [];
   ClassroomModel? _selectedClass;
   Map<String, String> _attendance = {}; 
+  bool _attendanceTaken= false;
 
   
   @override
@@ -44,22 +47,50 @@ class _AttendancePageState extends State<AttendancePage> {
   }
 
   void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    showToast(msg);
   }
 
   Future<void> _loadClassMembers(String classId) async {
     setState(() => _loading = true);
-    try {
-      final students = await _controller.getStudentsInClass(classId, token);
-      setState(() {
-        _studentsInClass = students;
-        _loading = false;
-      });
-    } catch (e) {
-      setState(() => _loading = false);
-      _showError('Failed to load class members: $e');
+    _checkAttendanceStatus(classId);
+    if (_attendanceTaken) {
+      try {
+        final students = await _controller.getStudentsInClass(classId, token);
+        setState(() {
+          _studentsInClass = students;
+          _loading = false;
+        });
+      } catch (e) {
+        setState(() => _loading = false);
+        _showError('Failed to load class members: $e');
+      }
     }
+    else{
+      return;
+    }
+    
   }
+
+  Future<void> _checkAttendanceStatus(String classId) async {
+  setState(() => _loading = true);
+
+  try {
+    // Call your controller method
+    final attendanceTaken = await AttendanceController.checkAttendance(
+      token: token,
+      classId: classId,
+    );
+
+    setState(() {
+      _attendanceTaken = attendanceTaken; // store the result in your state
+      _loading = false;
+    });
+  } catch (e) {
+    setState(() => _loading = false);
+    _showError('Failed to check attendance: $e');
+  }
+}
+
 
   Future<void> _submitAttendance() async {
   // Optional: ensure all students marked
@@ -91,9 +122,7 @@ class _AttendancePageState extends State<AttendancePage> {
     );
 
     setState(() => _loading = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Attendance submitted successfully!')),
-    );
+    showToast('Attendance for ${DateFormat('dd-MM-yyyy').format(DateTime.now())} submitted!');
   } catch (e) {
     setState(() => _loading = false);
     _showError('Error submitting attendance: $e');
@@ -101,9 +130,40 @@ class _AttendancePageState extends State<AttendancePage> {
 }
 
 
-// studentId -> 'Present' or 'Absent'
 
 Widget _buildStudentList() {
+  if (_attendanceTaken) {
+    return Card(
+      elevation: 2,
+      margin: const EdgeInsets.all(12),
+      child: SizedBox(
+        height: 250,
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: const [
+              Icon(
+                Icons.cancel_rounded,
+                color: Colors.redAccent,
+                size: 64,
+              ),
+              SizedBox(height: 12),
+              Text(
+                'Attendance already taken for',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.black87,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   return Card(
     child: SingleChildScrollView(
       child: Padding(
@@ -160,17 +220,21 @@ Widget _buildStudentList() {
                               ),
                             )
                           ],
-                      ),
-                    ],
-                  ),
-                );
-              }),
-          ],
+                        ),
+                      ],
+                    ),
+                  );
+                }),
+              Center(
+                child: ElevatedButton(
+                    onPressed: _submitAttendance, child: Text('Submit')),
+              )
+            ],
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
 
   @override
@@ -232,7 +296,6 @@ Widget _buildStudentList() {
               ),
               const SizedBox(height: 20),
               Expanded(child: _buildStudentList()),
-              ElevatedButton(onPressed: _submitAttendance, child: Text('Submit'))
             ])));
   }
 }

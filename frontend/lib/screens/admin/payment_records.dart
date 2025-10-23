@@ -90,7 +90,7 @@ class _UpdateFeesContentState extends State<UpdateFeesContent> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
             content:
-                Text(value ? "Successfully Fees Updated" : "Error occurred")),
+                Text(value ? "Fees updated for ${selectedClass} to ${_amountController.text}" : "Error occurred")),
       );
     } catch (e) {
       debugPrint("Error updating fees: $e");
