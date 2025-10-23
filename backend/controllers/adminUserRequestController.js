@@ -29,7 +29,7 @@ exports.approveUser = async (req, res) => {
         if(approve){
             user.isApproved = true;
             await user.save();
-            await sendAccountApprovalEmail(user.email, user.name);
+            sendAccountApprovalEmail(user.email, user.name);
             return res.status(200).json({ message: 'User approved successfully' });
         } else {
             await User.findByIdAndDelete(userId);
@@ -45,7 +45,24 @@ exports.approveUser = async (req, res) => {
 
 exports.approveAllUsers = async (req, res) => {
     try {
+        // Find all users that are not approved yet
+        const usersToApprove = await User.find({ isApproved: false }).select('email name');
+
+        if (!usersToApprove || usersToApprove.length === 0) {
+            return res.status(200).json({ message: 'No users to approve' });
+        }
+
         const result = await User.updateMany({ isApproved: false }, { isApproved: true });
+
+        // Send approval email to each user (non-blocking: send in background)
+        for (const u of usersToApprove) {
+            try {
+                sendAccountApprovalEmail(u.email, u.name);
+            } catch (emailErr) {
+                console.error(`Failed to send approval email to ${u.email}:`, emailErr);
+            }
+        }
+
         res.status(200).json({ message: `${result.modifiedCount} users approved successfully` });
     } catch (error) {
         console.error(error);
