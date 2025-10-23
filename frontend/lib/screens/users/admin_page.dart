@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:frontend/provider/auth_provider.dart';
+import 'package:frontend/provider/themeProvider.dart';
 import 'package:frontend/screens/admin/classroom_details.dart';
 import 'package:frontend/screens/admin/member_request.dart';
 import 'package:frontend/screens/admin/payment_records.dart';
@@ -36,15 +37,13 @@ class _AdminPageState extends State<AdminPage> {
       CombinedFeesPaymentsPage(),
     ];
   }
-  // Logout handled by the drawer's logout action; helper removed to avoid unused warning.
 
-    Future<void> _handleBackPressed(bool didPop, Object? result) async {
+  Future<void> _handleBackPressed(bool didPop, Object? result) async {
     if (selectedIndex == 1 || selectedIndex == 2 || selectedIndex == 3) {
       setState(() {
         selectedIndex = 0;
       });
-    }
-    else if (selectedIndex==0){
+    } else if (selectedIndex == 0) {
       showLogoutConfirmation(context);
     }
   }
@@ -67,6 +66,20 @@ class _AdminPageState extends State<AdminPage> {
               _scaffoldKey.currentState?.openDrawer();
             },
           ),
+          actions: [
+            if(selectedIndex!=1)
+            Consumer<ThemeProvider>(
+              builder: (context, themeProvider, _) => IconButton(
+                icon: Icon(
+                  themeProvider.isDarkMode
+                      ? Icons.dark_mode_rounded
+                      : Icons.light_mode_rounded,
+                ),
+                onPressed: () => themeProvider.toggleTheme(),
+                tooltip: 'Toggle Dark Mode',
+              ),
+            ),
+          ],
         ),
         drawer: const MyDrawer(),
         body:_pages[selectedIndex],
