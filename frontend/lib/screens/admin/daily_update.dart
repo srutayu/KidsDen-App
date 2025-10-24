@@ -1,5 +1,4 @@
 import 'dart:convert';
-
 import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:flutter/material.dart';
 import 'package:frontend/constants/url.dart';
@@ -38,10 +37,10 @@ class _DailyClassUpdatePageState extends State<DailyClassUpdatePage> {
   Set<String> selectedClassIds = {};
   late final userId = Provider.of<UserProvider>(context, listen: false).user!.id;
   late final userRole =  Provider.of<UserProvider>(context, listen: false).user!.role;
+  late final String username = Provider.of<UserProvider>(context, listen: false).user!.name;
   final ClassroomController _controllerAdmin = ClassroomController();
   final TeacherController _controllerTeacher = TeacherController();
   late String token;
-  bool _loading = false;
 
 
   @override
@@ -64,18 +63,17 @@ class _DailyClassUpdatePageState extends State<DailyClassUpdatePage> {
         setState(() {
           _classes = classes;
         });
-      } catch (e) {
-        setState(() => _loading = false);
+      }
+      catch (e){
+        showToast('Failed to load classes: $e');
       }
     } else if (role == 'teacher') {
       try {
         final classes = await _controllerTeacher.getAllClasses(token);
         setState(() {
           _classes = classes;
-          _loading = false;
         });
       } catch (e) {
-        setState(() => _loading = false);
         showToast('Failed to load classes: $e');
       }
     }
@@ -147,7 +145,7 @@ class _DailyClassUpdatePageState extends State<DailyClassUpdatePage> {
     }
   }
 
-  buffer.writeln("Regards,\nClass Teacher");
+  buffer.writeln("Regards,\n$username");
 
   final formattedMessage = buffer.toString().trim();
 
