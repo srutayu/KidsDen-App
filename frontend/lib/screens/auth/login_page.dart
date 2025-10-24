@@ -86,76 +86,26 @@ class _LoginPageState extends State<LoginPage> {
                             });
                           },
                         ),
+                        
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(15),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 20),
-
-// // ✉️ Email Field
-// TextField(
-//   controller: _email,
-//   keyboardType: TextInputType.emailAddress,
-//   decoration: InputDecoration(
-//     labelText: 'Email ID',
-//     prefixIcon: const Icon(Icons.email),
-//     filled: true,
-//     fillColor: Colors.grey[200],
-//     contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
-//     border: OutlineInputBorder(
-//       borderRadius: BorderRadius.circular(20),
-//       borderSide: BorderSide.none, // removes default grey line
-//     ),
-//     enabledBorder: OutlineInputBorder(
-//       borderRadius: BorderRadius.circular(20),
-//       borderSide: const BorderSide(color: Colors.grey),
-//     ),
-//     focusedBorder: OutlineInputBorder(
-//       borderRadius: BorderRadius.circular(20),
-//       borderSide: const BorderSide(color: Colors.teal, width: 2),
-//     ),
-//   ),
-// ),
-
-// const SizedBox(height: 20),
-
-// // 🔒 Password Field
-// TextField(
-//   controller: _password,
-//   obscureText: _obscureText,
-//   decoration: InputDecoration(
-//     labelText: 'Password',
-//     prefixIcon: const Icon(Icons.lock),
-//     suffixIcon: IconButton(
-//       icon: Icon(
-//         _obscureText ? Icons.visibility : Icons.visibility_off,
-//       ),
-//       onPressed: () {
-//         setState(() {
-//           _obscureText = !_obscureText;
-//         });
-//       },
-//     ),
-//     filled: true,
-//     fillColor: Colors.grey[200],
-//     contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
-//     border: OutlineInputBorder(
-//       borderRadius: BorderRadius.circular(20),
-//       borderSide: BorderSide.none,
-//     ),
-//     enabledBorder: OutlineInputBorder(
-//       borderRadius: BorderRadius.circular(20),
-//       borderSide: const BorderSide(color: Colors.grey),
-//     ),
-//     focusedBorder: OutlineInputBorder(
-//       borderRadius: BorderRadius.circular(20),
-//       borderSide: const BorderSide(color: Colors.teal, width: 2),
-//     ),
-//   ),
-// ),
-
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 5),
+                    TextButton(
+                            onPressed: () {
+                              Navigator.push(context, MaterialPageRoute(builder: (_) => const ChangePasswordPage()));
+                            },
+                            style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                            child: const Text(
+                              'Forgot Password?',
+                              style: TextStyle(
+                                color: Colors.blue,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                          ),
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton(onPressed: () async {
@@ -254,16 +204,8 @@ class _LoginPageState extends State<LoginPage> {
                           },
                           child: Text('Login')),
                     ),
-                    SizedBox(
-                      height: 20,
-                    ),
-                    const SizedBox(height: 20),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: TextButton(
+                    // const SizedBox(height: 5),
+                     TextButton(
                               onPressed: () {
                                 Navigator.pushReplacement(
                                   context,
@@ -279,26 +221,6 @@ class _LoginPageState extends State<LoginPage> {
                                 ),
                               ),
                             ),
-                          ),
-                        ),
-                        Align(
-                          alignment: Alignment.centerRight,
-                          child: TextButton(
-                            onPressed: () {
-                              Navigator.push(context, MaterialPageRoute(builder: (_) => const ChangePasswordPage()));
-                            },
-                            style: TextButton.styleFrom(padding: EdgeInsets.zero),
-                            child: const Text(
-                              'Forgot / Change Password',
-                              style: TextStyle(
-                                color: Colors.blue,
-                                decoration: TextDecoration.underline,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
                   ],
                 ),
               ),

@@ -2,21 +2,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:frontend/controllers/auth_controller.dart';
 import 'package:frontend/provider/auth_provider.dart';
-import 'package:frontend/screens/admin/attendance_views/admin_attendance.dart';
+import 'package:frontend/provider/user_data_provider.dart';
 import 'package:frontend/screens/admin/daily_update.dart';
 import 'package:frontend/screens/auth/onboarding_page.dart';
+import 'package:frontend/screens/chat/broadcast_screen.dart';
 import 'package:provider/provider.dart';
 
-class MyDrawer extends StatefulWidget {
-  const MyDrawer({super.key});
+class TeacherDrawer extends StatefulWidget {
+  const TeacherDrawer({super.key});
 
   @override
-  State<MyDrawer> createState() => _MyDrawerState();
+  State<TeacherDrawer> createState() => _TeacherDrawerState();
 }
 
-class _MyDrawerState extends State<MyDrawer> {
+class _TeacherDrawerState extends State<TeacherDrawer> {
   final storage= FlutterSecureStorage();
-  late final token = Provider.of<AuthProvider>(context, listen: false).token!;
+  late String token = Provider.of<AuthProvider>(context, listen: false).token!;
+  late String userId = Provider.of<UserProvider>(context, listen: false).user!.id;
+  late String role = Provider.of<UserProvider>(context, listen: false).user!.role;
 
   Future<void> _handleLogout() async {
     try {
@@ -61,7 +64,7 @@ class _MyDrawerState extends State<MyDrawer> {
           ),
           ListTile(
             leading: const Icon(Icons.campaign),
-            title: const Text('Daily Update/Broadcast'),
+            title: const Text('Daily Update'),
             onTap: () {
               Navigator.push(
                 context,
@@ -72,13 +75,13 @@ class _MyDrawerState extends State<MyDrawer> {
             },
           ),
           ListTile(
-            leading: const Icon(Icons.settings),
-            title: const Text('Attendance Views'),
+            leading: const Icon(Icons.speaker),
+            title: const Text('Send Broadcast'),
             onTap: () {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => const AdminAttendance(),
+                  builder: (context) => BroadcastScreen(authToken: token, userId: userId, userRole: role,),
                 ),
               );
             },

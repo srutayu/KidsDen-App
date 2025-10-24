@@ -3,7 +3,6 @@ import 'package:fluttertoast/fluttertoast.dart';
 import 'package:frontend/controllers/auth_controller.dart';
 import 'package:frontend/screens/auth/approval_pending.dart';
 import 'package:frontend/screens/auth/login_page.dart';
-import 'package:frontend/screens/auth/change_password.dart';
 
 class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key});
@@ -15,6 +14,7 @@ class SignUpPage extends StatefulWidget {
 class _SignUpPageState extends State<SignUpPage> {
   bool _isLoading = false;
   final TextEditingController _email = TextEditingController();
+  final TextEditingController _number = TextEditingController();
   final TextEditingController _password = TextEditingController();
   final TextEditingController _confirmPasswordController = TextEditingController();
   final TextEditingController _name = TextEditingController();
@@ -43,12 +43,19 @@ class _SignUpPageState extends State<SignUpPage> {
   bool isTeacher = true; // default switch = Student
   String _selectedRole = "teacher"; // same as default
 
+
+  bool isValidIndianPhoneNumber(String input) {
+  final trimmed = input.trim();
+  final regex = RegExp(r'^[0-9]{10}$');
+  return regex.hasMatch(trimmed);
+}
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
         body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(40.0),
+          padding: const EdgeInsets.all(20.0),
           child: Center(
             child: Card(
               elevation: 10,
@@ -109,6 +116,26 @@ class _SignUpPageState extends State<SignUpPage> {
                                 const SizedBox(
                                   height: 20,
                                 ),
+                                TextField(
+                                  controller: _number,
+                                  keyboardType: TextInputType.number,
+                                  decoration: InputDecoration(
+                                    labelText: 'Phone Number',
+                                    fillColor: Colors.grey[200],
+                                    prefixIcon: Icon(Icons.person),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                      borderSide:
+                                          BorderSide(color: Colors.grey),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                      borderSide: BorderSide(
+                                          color: Colors.teal, width: 2),
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(height: 20),
                                 TextField(
                                   controller: _email,
                                   keyboardType: TextInputType.emailAddress,
@@ -224,6 +251,11 @@ class _SignUpPageState extends State<SignUpPage> {
                                               Fluttertoast.showToast(
                                                   msg: 'Name Required');
                                               return;
+                                            } else if (!isValidIndianPhoneNumber(
+                                                _number.text)) {
+                                              Fluttertoast.showToast(
+                                                  msg: 'Invalid phone number');
+                                                  return;
                                             } else if (_email.text.isEmpty) {
                                               Fluttertoast.showToast(
                                                   msg: 'Email Required');
@@ -243,6 +275,7 @@ class _SignUpPageState extends State<SignUpPage> {
                                                       'Password Criteria not met');
                                               return;
                                             }
+                                            
 
                                             setState(() => _isLoading = true);
 
@@ -252,6 +285,7 @@ class _SignUpPageState extends State<SignUpPage> {
                                                 _email.text,
                                                 _password.text,
                                                 _selectedRole,
+                                                _number.text,
                                               );
 
                                               if (!mounted) return;
@@ -292,11 +326,9 @@ class _SignUpPageState extends State<SignUpPage> {
                                         : const Text("Register"),
                                   ),
                                 ),
-                                SizedBox(height: 20),
-                                Wrap(
-                                  alignment: WrapAlignment.center,
-                                  spacing: 8,
-                                  runSpacing: 4,
+                                SizedBox(height: 10),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
                                     const Text("Already have an account? "),
                                     TextButton(
@@ -308,7 +340,8 @@ class _SignUpPageState extends State<SignUpPage> {
                                           ),
                                         );
                                       },
-                                      style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                                      style: TextButton.styleFrom(
+                                          padding: EdgeInsets.zero),
                                       child: const Text(
                                         "Log In",
                                         style: TextStyle(
@@ -317,24 +350,8 @@ class _SignUpPageState extends State<SignUpPage> {
                                         ),
                                       ),
                                     ),
-                                    TextButton(
-                                      onPressed: () {
-                                        Navigator.push(
-                                          context,
-                                          MaterialPageRoute(builder: (_) => const ChangePasswordPage()),
-                                        );
-                                      },
-                                      style: TextButton.styleFrom(padding: EdgeInsets.zero),
-                                      child: const Text(
-                                        'Forgot / Change Password',
-                                        style: TextStyle(
-                                          color: Colors.blue,
-                                          decoration: TextDecoration.underline,
-                                        ),
-                                      ),
-                                    ),
                                   ],
-                                ),
+                                )
                               ],
                             )))))));
   }
