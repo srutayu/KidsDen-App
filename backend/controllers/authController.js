@@ -6,48 +6,61 @@ const { accountCreatedConfirmationEmail, sendPasswordOtpEmail } = require('../se
 const { sendWhatsAppMessage } = require('../services/whatsappService');
 require('dotenv').config();
 
-//TODO: Register User
-
+// Register User (email op tional, phone required)
 exports.registerUser = async (req, res) => {
     try {
-        const {name, email, phone,  password, role} = req.body;
-        if(!name || !email || !password) {
-            return res.status(400).json({ message: 'Please provide all required fields' });
-        }
-        const emailRegex = /^\S+@\S+\.\S+$/;
+        const { name, email, phone, password, role } = req.body;
 
-        if (!emailRegex.test(email)) {
+        // phone is required; email is optional
+        if (!name || !password || !phone) {
+            return res.status(400).json({ message: 'Please provide all required fields (name, phone, password)' });
+        }
+
+        const emailRegex = /^\S+@\S+\.\S+$/;
+        if (email && !emailRegex.test(email)) {
             return res.status(400).send('Invalid email format');
         }
-        
-        if(password.length < 6) {
+
+        if (password.length < 6) {
             return res.status(400).json({ message: 'Password must be at least 6 characters' });
         }
-        
-        if(!phone) {
-            return res.status(400).json({ message: 'Phone number is required' });
-        }
-        const phoneRegex = /^\d{10}$/; // Simple regex for 10 digit phone numbers
-        if (!phoneRegex.test(phone)) {
-            return res.status(400).json({ message: 'Invalid phone number format' });
-        }   
 
-        if(role && !['student','admin','teacher'].includes(role)) {
+        // Normalize phone for validation and duplicate checks
+        const rawPhone = String(phone || '');
+        const phoneDigits = rawPhone.replace(/\D/g, '');
+        if (phoneDigits.length < 10) {
+            return res.status(400).json({ message: 'Invalid phone number format' });
+        }
+        // If 10-digit local number, assume India and prefix 91
+        const normalizedPhone = phoneDigits.length === 10 ? `91${phoneDigits}` : phoneDigits;
+
+        if (role && !['student', 'admin', 'teacher'].includes(role)) {
             return res.status(400).json({ message: 'Invalid role' });
         }
 
-        if(role === 'admin') {
+        if (role === 'admin') {
             return res.status(403).json({ message: 'Cannot register as admin' });
         }
 
-        const existingUser = await User.findOne({ email });
-        if(existingUser) {
-            return res.status(400).json({ message: 'User already exists' });
+        // Check duplicates by email (if provided) and by phone
+        if (email) {
+            const existingByEmail = await User.findOne({ email });
+            if (existingByEmail) {
+                return res.status(400).json({ message: 'User with this email already exists' });
+            }
         }
 
-    const user = new User({ name, email, password, role, phone });
-    await user.save();
-    accountCreatedConfirmationEmail(email, name).catch(err => console.error('Account creation email error:', err));
+        const existingByPhone = await User.findOne({ phone: normalizedPhone });
+        if (existingByPhone) {
+            return res.status(400).json({ message: 'User with this phone number already exists' });
+        }
+
+        const user = new User({ name, email: email || null, password, role, phone: normalizedPhone });
+        await user.save();
+
+        if (email) {
+            accountCreatedConfirmationEmail(email, name).catch((err) => console.error('Account creation email error:', err));
+        }
 
         res.status(201).json({
             _id: user._id,
@@ -56,62 +69,72 @@ exports.registerUser = async (req, res) => {
             role: user.role,
             phone: user.phone,
         });
-
-    }catch (error) {
+    } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server error' });
     }
 };
-//TODO: Login User
+
+// Login User (use phone instead of email)
 exports.loginUser = async (req, res) => {
-  try {
-    const { email, password } = req.body;
+    try {
+        const { phone, password } = req.body;
 
-    const user = await User.findOne({ email });
-    if (!user) {
-        return res.status(401).json({ message: 'Invalid credentials' });
+        if (!phone || !password) {
+            return res.status(400).json({ message: 'Phone and password are required' });
+        }
+
+        // Normalize incoming phone similar to registration logic
+        const rawPhone = String(phone || '');
+        const phoneDigits = rawPhone.replace(/\D/g, '');
+        const normalizedPhone = phoneDigits.length === 10 ? `91${phoneDigits}` : phoneDigits;
+
+        const user = await User.findOne({ phone: normalizedPhone });
+        if (!user) {
+            return res.status(401).json({ message: 'Invalid credentials' });
+        }
+
+        const isMatch = await user.comparePassword(password);
+        if (!isMatch) {
+            return res.status(401).json({ message: 'Invalid credentials' });
+        }
+
+        if (!user.isApproved) {
+            return res.status(403).json({ message: 'Account awaiting admin approval' });
+        }
+
+        const token = generateToken(user);
+        if (!token) {
+            return res.status(500).json({ message: 'Token generation failed' });
+        }
+
+        // Check if user is already logged in
+        const existingToken = await redisClient.get(user._id.toString());
+        if (existingToken) {
+            return res.status(200).json({ message: 'User already logged in' });
+        }
+
+        // Store token in Redis with expiration (30 days)
+        const checkRedis = await redisClient.set(user._id.toString(), token, 'EX', 30 * 24 * 60 * 60);
+
+        res.status(200).json({
+            token,
+            user: {
+                _id: user._id,
+                name: user.name,
+                email: user.email,
+                role: user.role,
+            },
+            message: checkRedis === 'OK' ? 'Login successful' : 'Login successful, but failed to store session',
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server error during login' });
     }
-    
-    const isMatch = await user.comparePassword(password);
-    if (!isMatch) {
-        return res.status(401).json({ message: 'Invalid credentials' });
-    }
-
-    if (!user.isApproved) {
-      return res.status(403).json({ message: 'Account awaiting admin approval' });
-    }   
-
-    const token = generateToken(user);
-    if(!token) {
-        return res.status(500).json({ message: 'Token generation failed' });
-    }
-
-    //Check if user is already logged in
-    const existingToken = await redisClient.get(user._id.toString());
-    if(existingToken) {
-        return res.status(200).json({ message: 'User already logged in' });
-    }
-    // Store token in Redis with expiration
-    const checkRedis = await redisClient.set(user._id.toString(), token, 'EX', 30 * 24 * 60 * 60);
-    // console.log("Trying to login");
-    res.status(200).json({
-        token, 
-        user: {
-            _id: user._id,
-            name: user.name,
-            email: user.email,
-            role: user.role,
-        },
-        message: checkRedis === 'OK' ? 'Login successful' : 'Login successful, but failed to store session',
-    })
-
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error during login' });
-  }
 };
-//TODO: Logout User
-exports.logoutUser =async (req, res) => {
+
+// Logout User
+exports.logoutUser = async (req, res) => {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
         return res.status(401).json({ message: 'No token provided' });
@@ -119,7 +142,6 @@ exports.logoutUser =async (req, res) => {
     const token = authHeader.split(' ')[1];
     try {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        // console.log(decoded);
         if (!decoded || !decoded.id) {
             return res.status(401).json({ message: 'Invalid token' });
         }
@@ -138,11 +160,10 @@ exports.logoutUser =async (req, res) => {
     }
 };
 
-
+// Check approval
 exports.checkIfApproved = async (req, res) => {
     try {
-        const email  = req.query.email;
-        // console.log(req.query.email);
+        const email = req.query.email;
         if (!email) {
             return res.status(400).json({ message: 'Email is required' });
         }
@@ -152,14 +173,13 @@ exports.checkIfApproved = async (req, res) => {
             return res.status(404).json({ message: 'User not found' });
         }
         res.status(200).json({ isApproved: user.isApproved });
-    }
-    catch (error) {
+    } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server error checking approval status' });
     }
-}
+};
 
-//get user name from user id
+// Get user name from user id
 exports.getUserNameById = async (req, res) => {
     try {
         const userId = req.query.userId;
@@ -176,7 +196,7 @@ exports.getUserNameById = async (req, res) => {
         console.error(error);
         res.status(500).json({ message: 'Server error retrieving user name' });
     }
-}
+};
 
 exports.getRoleAndTimefromToken = (req, res) => {
     const authHeader = req.headers.authorization;
@@ -188,7 +208,8 @@ exports.getRoleAndTimefromToken = (req, res) => {
         const decoded = jwt.verify(token, process.env.JWT_SECRET);
         const role = decoded.role;
         const id = decoded.id;
-        let loginDate = null, loginTime = null;
+        let loginDate = null,
+            loginTime = null;
         if (decoded.iat) {
             const loginDateObj = new Date(decoded.iat * 1000);
             loginDate = loginDateObj.toISOString().split('T')[0]; // YYYY-MM-DD
@@ -211,7 +232,7 @@ exports.requestPasswordOtp = async (req, res) => {
         const user = await User.findOne({ email });
         if (!user) return res.status(404).json({ message: 'User not found' });
 
-    const phone = user.phone || null; // if no phone, we'll send OTP via email only
+        const phone = user.phone || null; // if no phone, we'll send OTP via email only
 
         // Generate 6-digit OTP
         const otp = Math.floor(100000 + Math.random() * 900000).toString();

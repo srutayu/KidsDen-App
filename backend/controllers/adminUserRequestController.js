@@ -30,12 +30,14 @@ exports.approveUser = async (req, res) => {
         if(approve){
             user.isApproved = true;
             await user.save();
-            // Send account approval email (don't block on failures)
-            sendAccountApprovalEmail(user.email, user.name).catch(err => console.error('[Admin] Account approval email error:', err));
+            // Send account approval email (don't block on failures) if email exists
+            if (user.email) {
+                sendAccountApprovalEmail(user.email, user.name).catch(err => console.error('[Admin] Account approval email error:', err));
+            }
 
-            // Send WhatsApp notification if phone exists
-            try {
-                if (user.phone) {
+            // Send WhatsApp notification if phone exists (fire-and-forget, log errors)
+            if (user.phone) {
+                try {
                     let to = user.phone.toString();
                     if (!to.startsWith('+')) {
                         if (/^\d{10}$/.test(to)) {
@@ -47,10 +49,10 @@ exports.approveUser = async (req, res) => {
                         }
                     }
                     const msg = `Hi ${user.name}, your account has been approved. You can now log in to Kids Den.`;
-                    sendWhatsAppMessage(to, msg);
+                    sendWhatsAppMessage(to, msg).catch(err => console.error('[Admin] Failed to send WhatsApp approval message:', err));
+                } catch (waErr) {
+                    console.error('[Admin] Failed to prepare WhatsApp approval message:', waErr);
                 }
-            } catch (waErr) {
-                console.error('[Admin] Failed to send WhatsApp approval message:', waErr);
             }
 
             return res.status(200).json({ message: 'User approved successfully' });
@@ -79,12 +81,14 @@ exports.approveAllUsers = async (req, res) => {
             await user.save();
             approvedCount++;
 
-            // Send email (non-blocking)
-            sendAccountApprovalEmail(user.email, user.name).catch(err => console.error('[Admin] Account approval email error:', err));
+            // Send email (non-blocking) if email exists
+            if (user.email) {
+                sendAccountApprovalEmail(user.email, user.name).catch(err => console.error('[Admin] Account approval email error:', err));
+            }
 
-            // Send WhatsApp if phone exists
-            try {
-                if (user.phone) {
+            // Send WhatsApp if phone exists (fire-and-forget)
+            if (user.phone) {
+                try {
                     let to = user.phone.toString();
                     if (!to.startsWith('+')) {
                         if (/^\d{10}$/.test(to)) {
@@ -96,10 +100,10 @@ exports.approveAllUsers = async (req, res) => {
                         }
                     }
                     const msg = `Hi ${user.name}, your account has been approved. You can now log in to Kids Den.`;
-                    sendWhatsAppMessage(to, msg);
+                    sendWhatsAppMessage(to, msg).catch(err => console.error('[Admin] Failed to send WhatsApp approval message to', user.email, err));
+                } catch (waErr) {
+                    console.error('[Admin] Failed to prepare WhatsApp approval message to', user.email, waErr);
                 }
-            } catch (waErr) {
-                console.error('[Admin] Failed to send WhatsApp approval message to', user.email, waErr);
             }
         }
 
