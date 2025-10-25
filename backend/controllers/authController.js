@@ -75,22 +75,48 @@ exports.registerUser = async (req, res) => {
     }
 };
 
-// Login User (use phone instead of email)
+// Login User (allow email or phone)
 exports.loginUser = async (req, res) => {
     try {
-        const { phone, password } = req.body;
+        const { email, phone, identifier, password } = req.body;
 
-        if (!phone || !password) {
-            return res.status(400).json({ message: 'Phone and password are required' });
+        if (!password) {
+            return res.status(400).json({ message: 'Password is required' });
         }
 
-        // Normalize incoming phone similar to registration logic
-        const rawPhone = String(phone || '');
-        const phoneDigits = rawPhone.replace(/\D/g, '');
-        const normalizedPhone = phoneDigits.length === 10 ? `91${phoneDigits}` : phoneDigits;
+        let lookupBy = null; // 'email' or 'phone'
+        let lookupValue = null;
 
-        const user = await User.findOne({ phone: normalizedPhone });
+        // Allow caller to provide `identifier` (email or phone) for convenience
+        const supplied = identifier || email || phone;
+        if (!supplied) {
+            return res.status(400).json({ message: 'Please provide email or phone along with password' });
+        }
+
+        // Determine if supplied value is an email (contains @)
+        if ((identifier && identifier.includes('@')) || (email && typeof email === 'string')) {
+            lookupBy = 'email';
+            lookupValue = identifier && identifier.includes('@') ? identifier : email;
+        } else {
+            lookupBy = 'phone';
+            const rawPhone = String(identifier || phone || '');
+            const phoneDigits = rawPhone.replace(/\D/g, '');
+            lookupValue = phoneDigits.length === 10 ? `91${phoneDigits}` : phoneDigits;
+        }
+
+        // Fetch user
+        let user;
+        if (lookupBy === 'email') {
+            user = await User.findOne({ email: lookupValue });
+        } else {
+            user = await User.findOne({ phone: lookupValue });
+        }
+
         if (!user) {
+            return res.status(401).json({ message: 'Invalid credentials' });
+        }
+
+        if (lookupBy === 'email' && !user.email) {
             return res.status(401).json({ message: 'Invalid credentials' });
         }
 
@@ -223,16 +249,33 @@ exports.getRoleAndTimefromToken = (req, res) => {
 };
 
 // ===== Password reset / change using OTP over WhatsApp =====
-// POST /api/auth/password/request-otp   { email }
+// POST /api/auth/password/request-otp   { phone || email || identifier }
 exports.requestPasswordOtp = async (req, res) => {
     try {
-        const { email } = req.body;
-        if (!email) return res.status(400).json({ message: 'Email is required' });
+        const { phone, email, identifier } = req.body;
+        const supplied = identifier || phone || email;
+        if (!supplied) return res.status(400).json({ message: 'Provide phone or email to request OTP' });
 
-        const user = await User.findOne({ email });
+        // Determine lookup preference: prefer phone when possible
+        let user = null;
+        // If phone provided or identifier looks like phone (no @), try phone first
+        const looksLikeEmail = (identifier && identifier.includes('@')) || (email && email.includes('@'));
+        if (phone || (!looksLikeEmail && identifier)) {
+            const rawPhone = String(phone || identifier || '');
+            const phoneDigits = rawPhone.replace(/\D/g, '');
+            const normalizedPhone = phoneDigits.length === 10 ? `91${phoneDigits}` : phoneDigits;
+            if (normalizedPhone) {
+                user = await User.findOne({ phone: normalizedPhone });
+            }
+        }
+
+        // If not found by phone, and email supplied or identifier is email-like, try email
+        if (!user && (email || looksLikeEmail)) {
+            const lookupEmail = (identifier && identifier.includes('@')) ? identifier : email;
+            if (lookupEmail) user = await User.findOne({ email: lookupEmail });
+        }
+
         if (!user) return res.status(404).json({ message: 'User not found' });
-
-        const phone = user.phone || null; // if no phone, we'll send OTP via email only
 
         // Generate 6-digit OTP
         const otp = Math.floor(100000 + Math.random() * 900000).toString();
@@ -243,17 +286,18 @@ exports.requestPasswordOtp = async (req, res) => {
 
         const message = `Your OTP to change password is ${otp}. It will expire in 5 minutes.`;
 
-        // Try WhatsApp only if phone exists
+        // Prefer WhatsApp (phone) if user has phone, else email
         let waSuccess = false;
         let emailSuccess = false;
 
-        if (phone) {
+        if (user.phone) {
             try {
-                // Prepare phone in E.164. If phone looks like 10 digits, assume +91 (India) as fallback.
-                let to = phone;
+                let to = user.phone.toString();
                 if (!to.startsWith('+')) {
                     if (/^\d{10}$/.test(to)) {
                         to = `+91${to}`;
+                    } else if (/^91\d{10}$/.test(to)) {
+                        to = `+${to}`;
                     } else {
                         to = `+${to}`;
                     }
@@ -265,12 +309,13 @@ exports.requestPasswordOtp = async (req, res) => {
             }
         }
 
-        // Always try email
-        try {
-            await sendPasswordOtpEmail(email, otp, 5);
-            emailSuccess = true;
-        } catch (emailErr) {
-            console.error('[Auth] Failed to send OTP via Email:', emailErr);
+        if (!waSuccess && user.email) {
+            try {
+                await sendPasswordOtpEmail(user.email, otp, 5);
+                emailSuccess = true;
+            } catch (emailErr) {
+                console.error('[Auth] Failed to send OTP via Email:', emailErr);
+            }
         }
 
         if (!waSuccess && !emailSuccess) {
@@ -284,13 +329,27 @@ exports.requestPasswordOtp = async (req, res) => {
     }
 };
 
-// POST /api/auth/password/verify-otp  { email, otp }
+// POST /api/auth/password/verify-otp  { phone || email || identifier, otp }
 exports.verifyPasswordOtp = async (req, res) => {
     try {
-        const { email, otp } = req.body;
-        if (!email || !otp) return res.status(400).json({ message: 'Email and OTP are required' });
+        const { phone, email, identifier, otp } = req.body;
+        if (!otp || !(phone || email || identifier)) return res.status(400).json({ message: 'Provide identifier (phone/email) and OTP' });
 
-        const user = await User.findOne({ email });
+        // Lookup user: prefer phone
+        let user = null;
+        const looksLikeEmail = (identifier && identifier.includes('@')) || (email && email.includes('@'));
+        if (phone || (!looksLikeEmail && identifier)) {
+            const rawPhone = String(phone || identifier || '');
+            const phoneDigits = rawPhone.replace(/\D/g, '');
+            const normalizedPhone = phoneDigits.length === 10 ? `91${phoneDigits}` : phoneDigits;
+            if (normalizedPhone) user = await User.findOne({ phone: normalizedPhone });
+        }
+
+        if (!user && (email || looksLikeEmail)) {
+            const lookupEmail = (identifier && identifier.includes('@')) ? identifier : email;
+            if (lookupEmail) user = await User.findOne({ email: lookupEmail });
+        }
+
         if (!user) return res.status(404).json({ message: 'User not found' });
 
         const otpKey = `pwd_otp:${user._id}`;
@@ -315,14 +374,28 @@ exports.verifyPasswordOtp = async (req, res) => {
     }
 };
 
-// POST /api/auth/password/change  { email, newPassword }
+// POST /api/auth/password/change  { phone||email||identifier, newPassword }
 exports.changePasswordWithOtp = async (req, res) => {
     try {
-        const { email, newPassword } = req.body;
-        if (!email || !newPassword) return res.status(400).json({ message: 'Email and newPassword are required' });
+        const { phone, email, identifier, newPassword } = req.body;
+        if (!newPassword || !(phone || email || identifier)) return res.status(400).json({ message: 'Provide identifier (phone/email) and newPassword' });
         if (newPassword.length < 6) return res.status(400).json({ message: 'Password must be at least 6 characters' });
 
-        const user = await User.findOne({ email });
+        // Lookup user: prefer phone
+        let user = null;
+        const looksLikeEmail = (identifier && identifier.includes('@')) || (email && email.includes('@'));
+        if (phone || (!looksLikeEmail && identifier)) {
+            const rawPhone = String(phone || identifier || '');
+            const phoneDigits = rawPhone.replace(/\D/g, '');
+            const normalizedPhone = phoneDigits.length === 10 ? `91${phoneDigits}` : phoneDigits;
+            if (normalizedPhone) user = await User.findOne({ phone: normalizedPhone });
+        }
+
+        if (!user && (email || looksLikeEmail)) {
+            const lookupEmail = (identifier && identifier.includes('@')) ? identifier : email;
+            if (lookupEmail) user = await User.findOne({ email: lookupEmail });
+        }
+
         if (!user) return res.status(404).json({ message: 'User not found' });
 
         const verifiedKey = `pwd_otp_verified:${user._id}`;
