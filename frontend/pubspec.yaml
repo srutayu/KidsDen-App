@@ -64,6 +64,9 @@ dependencies:
   dio: ^5.9.0
   cached_network_image: ^3.3.1
   video_thumbnail: ^0.5.6
+  flutter_image_compress: ^2.4.0
+  video_compress: ^3.1.4
+  file_picker: ^10.3.3
 
 
 
