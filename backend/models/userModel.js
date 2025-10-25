@@ -8,14 +8,13 @@ const userSchema = new mongoose.Schema({
     },
     email: {
         type: String,
-        required: false,
+        required: false
     },
     phone: {
         type: String,
-        required: true,
+        required: false,
         trim: true,
-        default: null,
-        unique: true
+        default: undefined
     },
     password: {
         type: String,
@@ -57,6 +56,10 @@ userSchema.pre('save', async function(next) {
     this.password = await bcrypt.hash(this.password, salt);
     next();
 });
+
+
+userSchema.index({ email: 1 }, { unique: true, partialFilterExpression: { email: { $exists: true, $ne: null } } });
+userSchema.index({ phone: 1 }, { unique: true, partialFilterExpression: { phone: { $exists: true, $ne: null } } });
 
 userSchema.methods.comparePassword = async function (enteredPassword) {
     return await bcrypt.compare(enteredPassword, this.password);

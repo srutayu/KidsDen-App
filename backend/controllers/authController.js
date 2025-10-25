@@ -6,14 +6,17 @@ const { accountCreatedConfirmationEmail, sendPasswordOtpEmail } = require('../se
 const { sendWhatsAppMessage } = require('../services/whatsappService');
 require('dotenv').config();
 
-// Register User (email op tional, phone required)
+// Register User (email and phone both optional; if provided must be unique)
 exports.registerUser = async (req, res) => {
     try {
         const { name, email, phone, password, role } = req.body;
 
-        // phone is required; email is optional
-        if (!name || !password || !phone) {
-            return res.status(400).json({ message: 'Please provide all required fields (name, phone, password)' });
+        // name and password are required; phone/email are optional
+        if (!name || !password) {
+            return res.status(400).json({ message: 'Please provide name and password' });
+        }
+        if(!email && !phone){
+            return res.status(400).json({ message: 'Please provide at least email or phone' });
         }
 
         const emailRegex = /^\S+@\S+\.\S+$/;
@@ -25,14 +28,17 @@ exports.registerUser = async (req, res) => {
             return res.status(400).json({ message: 'Password must be at least 6 characters' });
         }
 
-        // Normalize phone for validation and duplicate checks
-        const rawPhone = String(phone || '');
-        const phoneDigits = rawPhone.replace(/\D/g, '');
-        if (phoneDigits.length < 10) {
-            return res.status(400).json({ message: 'Invalid phone number format' });
+        // Normalize phone for validation and duplicate checks (only if provided)
+        let normalizedPhone = null;
+        if (phone) {
+            const rawPhone = String(phone || '');
+            const phoneDigits = rawPhone.replace(/\D/g, '');
+            if (phoneDigits.length < 10) {
+                return res.status(400).json({ message: 'Invalid phone number format' });
+            }
+            // If 10-digit local number, assume India and prefix 91
+            normalizedPhone = phoneDigits.length === 10 ? `91${phoneDigits}` : phoneDigits;
         }
-        // If 10-digit local number, assume India and prefix 91
-        const normalizedPhone = phoneDigits.length === 10 ? `91${phoneDigits}` : phoneDigits;
 
         if (role && !['student', 'admin', 'teacher'].includes(role)) {
             return res.status(400).json({ message: 'Invalid role' });
@@ -42,7 +48,7 @@ exports.registerUser = async (req, res) => {
             return res.status(403).json({ message: 'Cannot register as admin' });
         }
 
-        // Check duplicates by email (if provided) and by phone
+        // Check duplicates only when email/phone are provided
         if (email) {
             const existingByEmail = await User.findOne({ email });
             if (existingByEmail) {
@@ -50,12 +56,17 @@ exports.registerUser = async (req, res) => {
             }
         }
 
-        const existingByPhone = await User.findOne({ phone: normalizedPhone });
-        if (existingByPhone) {
-            return res.status(400).json({ message: 'User with this phone number already exists' });
+        if (normalizedPhone) {
+            const existingByPhone = await User.findOne({ phone: normalizedPhone });
+            if (existingByPhone) {
+                return res.status(400).json({ message: 'User with this phone number already exists' });
+            }
         }
 
-        const user = new User({ name, email: email || null, password, role, phone: normalizedPhone });
+        const userData = { name, password, role };
+        if (normalizedPhone) userData.phone = normalizedPhone;
+        if (email) userData.email = email;
+    const user = new User(userData);
         await user.save();
 
         if (email) {
@@ -186,19 +197,40 @@ exports.logoutUser = async (req, res) => {
     }
 };
 
-// Check approval
+// Check approval - works with email or phone (or identifier)
 exports.checkIfApproved = async (req, res) => {
     try {
-        const email = req.query.email;
-        if (!email) {
-            return res.status(400).json({ message: 'Email is required' });
+        const { email, phone, identifier } = req.query;
+
+        if (!email && !phone && !identifier) {
+            return res.status(400).json({ message: 'Provide email or phone to check approval status' });
         }
 
-        const user = await User.findOne({ email });
+        // Prefer phone lookup when possible
+        let user = null;
+        const identifierLooksLikeEmail = identifier && identifier.includes('@');
+
+        if (phone || (!identifierLooksLikeEmail && identifier)) {
+            const rawPhone = String(phone || identifier || '');
+            const phoneDigits = rawPhone.replace(/\D/g, '');
+            if (phoneDigits.length === 0) {
+                return res.status(400).json({ message: 'Invalid phone number format' });
+            }
+            const normalizedPhone = phoneDigits.length === 10 ? `91${phoneDigits}` : phoneDigits;
+            user = await User.findOne({ phone: normalizedPhone });
+        }
+
+        // If not found by phone, try email
+        if (!user && (email || identifierLooksLikeEmail)) {
+            const lookupEmail = identifierLooksLikeEmail ? identifier : email;
+            if (lookupEmail) user = await User.findOne({ email: lookupEmail });
+        }
+
         if (!user) {
             return res.status(404).json({ message: 'User not found' });
         }
-        res.status(200).json({ isApproved: user.isApproved });
+
+        return res.status(200).json({ isApproved: user.isApproved });
     } catch (error) {
         console.error(error);
         res.status(500).json({ message: 'Server error checking approval status' });
