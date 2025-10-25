@@ -52,14 +52,14 @@ exports.registerUser = async (req, res) => {
         if (email) {
             const existingByEmail = await User.findOne({ email });
             if (existingByEmail) {
-                return res.status(400).json({ message: 'User with this email already exists' });
+                return res.status(400).json({ message: 'E-mail ID already used' });
             }
         }
 
         if (normalizedPhone) {
             const existingByPhone = await User.findOne({ phone: normalizedPhone });
             if (existingByPhone) {
-                return res.status(400).json({ message: 'User with this phone number already exists' });
+                return res.status(400).json({ message: 'Phone number already used' });
             }
         }
 

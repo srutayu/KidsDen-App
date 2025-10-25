@@ -46,7 +46,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
     setState(() => _loading = true);
     try {
       final res = await http.post(Uri.parse('$baseUrl/auth/password/request-otp'),
-          headers: {'Content-Type': 'application/json'}, body: jsonEncode({'email': email}));
+          headers: {'Content-Type': 'application/json'}, body: jsonEncode({'phone': email}));
       final body = jsonDecode(res.body);
       if (res.statusCode == 200) {
         _showMessage(body['message'] ?? 'OTP sent');
