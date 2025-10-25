@@ -53,9 +53,9 @@ class _LoginPageState extends State<LoginPage> {
                     TextField(
                       controller: _email,
                       decoration: InputDecoration(
-                        labelText: 'Email ID',
+                        labelText: 'Email ID/Phone Number',
                         fillColor: Colors.grey[200],
-                        prefixIcon: Icon(Icons.email),
+                        prefixIcon: Icon(Icons.person_2_outlined),
                         enabledBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(15),
                           borderSide: BorderSide(color: Colors.grey),
@@ -134,7 +134,7 @@ class _LoginPageState extends State<LoginPage> {
 
                               // 2️⃣ Now safely check if user is approved
                               bool isApproved =
-                                  await AuthController.checkIfAproved(
+                                  await AuthController.checkIfApproved(
                                       _email.text.trim());
 
                               if (!isApproved) {

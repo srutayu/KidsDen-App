@@ -4,7 +4,11 @@
 README.md
 *.md
 
+# Ignore environment files anywhere in the repo
+.env
 *.env
+**/.env
+.env.*
 
 logs
 .vscode

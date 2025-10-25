@@ -74,18 +74,6 @@ class _ChatScreenState extends State<ChatScreen> {
 void _handleScroll() {
   final pos = _scrollController.position;
 
-  // // --- 1️⃣ Detect when user reaches top (to load older messages) ---
-  // if (pos.pixels >= pos.maxScrollExtent - 200) {
-  //   print('⬆️ Near top of the list — load older messages');
-  //   // _loadOlderMessages();
-  // }
-
-  // // --- 2️⃣ Detect when user is near bottom (new messages area) ---
-  // if (pos.pixels <= 200) {
-  //   print('⬇️ Near bottom of the list — newest messages zone');
-  //   // could auto-scroll to bottom or mark read, etc.
-  // }
-
   // --- 3️⃣ Preload next and previous few images ---
   final double offset = pos.pixels;
   final int approxIndex = (offset / 180).floor();
@@ -1178,7 +1166,7 @@ Widget _buildFilePreview(Map parsed, String messageId) {
                               IconButton(
                                 icon: Icon(Icons.send),
                                 color: Colors.white,
-                                onPressed: () => sendMessage(_controller.text),
+                                onPressed: () => sendMessage(_controller.text.trim()),
                               ),
                             ],
                           ),

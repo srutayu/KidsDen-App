@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:frontend/controllers/auth_controller.dart';
@@ -14,7 +16,7 @@ class SignUpPage extends StatefulWidget {
 class _SignUpPageState extends State<SignUpPage> {
   bool _isLoading = false;
   final TextEditingController _email = TextEditingController();
-  final TextEditingController _number = TextEditingController();
+  final TextEditingController _phone = TextEditingController();
   final TextEditingController _password = TextEditingController();
   final TextEditingController _confirmPasswordController = TextEditingController();
   final TextEditingController _name = TextEditingController();
@@ -39,13 +41,19 @@ class _SignUpPageState extends State<SignUpPage> {
   bool get isMatch => _password.text.isNotEmpty && _confirmPasswordController.text.isNotEmpty&&
       _password.text == _confirmPasswordController.text;
   final RegExp emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
-  bool get isEmailValid => emailRegex.hasMatch(_email.text);
+  bool get isEmailValid {
+    final text = _email.text.trim();
+    if (text.isEmpty) return true; // ✅ allow empty (optional field)
+    return emailRegex.hasMatch(text);
+  }
+
   bool isTeacher = true; // default switch = Student
   String _selectedRole = "teacher"; // same as default
 
 
   bool isValidIndianPhoneNumber(String input) {
   final trimmed = input.trim();
+  if (input.isEmpty) return true;
   final regex = RegExp(r'^[0-9]{10}$');
   return regex.hasMatch(trimmed);
 }
@@ -117,7 +125,7 @@ class _SignUpPageState extends State<SignUpPage> {
                                   height: 20,
                                 ),
                                 TextField(
-                                  controller: _number,
+                                  controller: _phone,
                                   keyboardType: TextInputType.number,
                                   decoration: InputDecoration(
                                     labelText: 'Phone Number',
@@ -247,23 +255,28 @@ class _SignUpPageState extends State<SignUpPage> {
                                     onPressed: _isLoading
                                         ? null
                                         : () async {
+                                            final email = _email.text.trim().isEmpty ? null : _email.text.trim();
+                                            final phone = _phone.text.trim().isEmpty ? null : _phone.text.trim();
+                                           
                                             if (_name.text.isEmpty) {
                                               Fluttertoast.showToast(
                                                   msg: 'Name Required');
                                               return;
                                             } else if (!isValidIndianPhoneNumber(
-                                                _number.text)) {
+                                                _phone.text)) {
                                               Fluttertoast.showToast(
                                                   msg: 'Invalid phone number');
                                                   return;
-                                            } else if (_email.text.isEmpty) {
-                                              Fluttertoast.showToast(
-                                                  msg: 'Email Required');
-                                              return;
                                             } else if (!isEmailValid) {
                                               Fluttertoast.showToast(
                                                   msg: 'Invalid Email');
                                               return;
+                                            } else if (email == null &&
+                                                phone == null) {
+                                              Fluttertoast.showToast(
+                                                  msg:
+                                                      'Either Phone or E-Mail required');
+                                                      return;
                                             } else if (_password.text.isEmpty) {
                                               Fluttertoast.showToast(
                                                   msg: 'Password Required');
@@ -278,14 +291,15 @@ class _SignUpPageState extends State<SignUpPage> {
                                             
 
                                             setState(() => _isLoading = true);
+                                            
 
                                             try {
                                               await AuthController.register(
                                                 _name.text,
-                                                _email.text,
+                                                email,
                                                 _password.text,
                                                 _selectedRole,
-                                                _number.text,
+                                                phone
                                               );
 
                                               if (!mounted) return;
@@ -297,16 +311,30 @@ class _SignUpPageState extends State<SignUpPage> {
                                                         ApprovalPending()),
                                               );
                                             } catch (error) {
-                                              Fluttertoast.showToast(
-                                                msg: error
+                                              String errorMessage =
+                                                  "Something went wrong";
+
+                                              try {
+                                                final Map<String, dynamic>
+                                                    decoded = jsonDecode(error
+                                                        .toString()
+                                                        .replaceFirst(
+                                                            "Exception: ", ""));
+                                                if (decoded
+                                                    .containsKey('message')) {
+                                                  errorMessage =
+                                                      decoded['message'];
+                                                }
+                                              } catch (e) {
+                                                // If decoding fails, fallback to default clean string
+                                                errorMessage = error
                                                     .toString()
                                                     .replaceFirst(
-                                                        "Exception: ", ""),
-                                                toastLength: Toast.LENGTH_SHORT,
-                                                gravity: ToastGravity.BOTTOM,
-                                                textColor: Colors.white,
-                                                fontSize: 16.0,
-                                              );
+                                                        "Exception: ", "");
+                                              }
+
+                                              Fluttertoast.showToast(
+                                                  msg: errorMessage);
                                             } finally {
                                               if (mounted) {
                                                 setState(
