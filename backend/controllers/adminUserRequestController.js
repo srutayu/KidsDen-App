@@ -1,6 +1,6 @@
 const User = require('../models/userModel');
 const { sendAccountApprovalEmail } = require('../services/emailServices');
-const { sendWhatsAppMessage } = require('../services/whatsappService');
+const { sendWhatsAppMessage, sendTextMessage } = require('../services/whatsappService');
 
 exports.getPendingApprovals = async (req, res) => {
     try{
@@ -49,7 +49,7 @@ exports.approveUser = async (req, res) => {
                         }
                     }
                     const msg = `Hi ${user.name}, your account has been approved. You can now log in to Kids Den.`;
-                    sendWhatsAppMessage(to, msg).catch(err => console.error('[Admin] Failed to send WhatsApp approval message:', err));
+                    sendTextMessage(to, msg).catch(err => console.error('[Admin] Failed to send WhatsApp approval message:', err));
                 } catch (waErr) {
                     console.error('[Admin] Failed to prepare WhatsApp approval message:', waErr);
                 }
@@ -100,7 +100,7 @@ exports.approveAllUsers = async (req, res) => {
                         }
                     }
                     const msg = `Hi ${user.name}, your account has been approved. You can now log in to Kids Den.`;
-                    sendWhatsAppMessage(to, msg).catch(err => console.error('[Admin] Failed to send WhatsApp approval message to', user.email, err));
+                    sendTextMessage(to, msg).catch(err => console.error('[Admin] Failed to send WhatsApp approval message to', user.email, err));
                 } catch (waErr) {
                     console.error('[Admin] Failed to prepare WhatsApp approval message to', user.email, waErr);
                 }

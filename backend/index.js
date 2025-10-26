@@ -7,6 +7,8 @@ require('dotenv').config();
 const connectDB = require('./config/db');
 const errorHandler = require('./middleware/errorHandler');
 const { startFeeScheduler } = require('./scheduler/feeScheduler.js');
+const whatsappRoutes = require('./routes/whatsappRoutes');
+const { initWhatsApp } = require('./services/whatsappService');
 
 // Start the fee scheduler
 startFeeScheduler();
@@ -49,6 +51,8 @@ if (cluster.isMaster) {
         port: port
       });
     });
+    // Initialize WhatsApp client on server startup
+    initWhatsApp();
 
     app.use('/api/auth', require('./routes/authRoutes'));
     app.use('/api/admin', require('./routes/adminRoutes'));
@@ -60,7 +64,8 @@ if (cluster.isMaster) {
     app.use('/api/teacher', require('./routes/teacherRoutes'));
     app.use('/api/adminteacher', require('./routes/adminteacherRoutes'));
     app.use('/api/adminstudent', require('./routes/adminStudentRoutes'));
-    app.use('/api/whatsapp', require('./routes/whatsappRoutes'));
+    // app.use('/api/whatsapp', require('./routes/whatsappRoutes'));
+    app.use('/whatsapp', whatsappRoutes);
 
     app.use(errorHandler);
 

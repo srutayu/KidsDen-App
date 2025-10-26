@@ -13,4 +13,6 @@ README.md
 logs
 .vscode
 frontend/lib/constants/url.dart
+/backend/.wwebjs_auth
+/backend/.wwebjs_cache
 
