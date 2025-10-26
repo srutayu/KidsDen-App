@@ -39,7 +39,7 @@ RUN addgroup -S appuser && \
     mkdir -p /var/log/supervisor /app/logs && \
     chown -R appuser:appuser /app && \
     chown -R appuser:appuser /var/log/supervisor && \
-    chmod -R 755 /app/logs
+    chmod -R 777 /app/logs
 
 # Switch to non-root user
 USER appuser
