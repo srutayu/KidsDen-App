@@ -90,6 +90,10 @@ async function initWhatsApp() {
   if (client) return client;
 
   client = new Client({
+    puppeteer: {
+    executablePath: '/usr/bin/chromium-browser',
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+  },
     authStrategy: new LocalAuth({ dataPath: './.wwebjs_auth' }),
   });
 

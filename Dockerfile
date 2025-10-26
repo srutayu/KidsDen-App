@@ -2,7 +2,7 @@
 FROM node:18-alpine as base
 
 # Install necessary packages including supervisor for process management
-RUN apk add --no-cache supervisor curl netcat-openbsd
+RUN apk add --no-cache supervisor curl netcat-openbsd chromium nss freetype harfbuzz ca-certificates ttf-freefont
 
 # Set working directory
 WORKDIR /app

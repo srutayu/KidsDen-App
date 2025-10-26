@@ -13,12 +13,14 @@ const { initWhatsApp } = require('./services/whatsappService');
 // Start the fee scheduler
 startFeeScheduler();
 
+
 // const numCPUs = os.cpus().length;
 const numCPUs = 1; // For development, limit to 2 CPUs. Change as needed.
 const port = process.env.PORT || 3000;
 
 if (cluster.isMaster) {
   console.log(`Master ${process.pid} is running`);
+  initWhatsApp();
 
   // Fork workers for each CPU core
   for (let i = 0; i < numCPUs; i++) {
@@ -52,7 +54,7 @@ if (cluster.isMaster) {
       });
     });
     // Initialize WhatsApp client on server startup
-    initWhatsApp();
+
 
     app.use('/api/auth', require('./routes/authRoutes'));
     app.use('/api/admin', require('./routes/adminRoutes'));
