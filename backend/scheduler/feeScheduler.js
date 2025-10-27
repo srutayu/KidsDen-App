@@ -3,7 +3,7 @@ const mongoose = require('mongoose');
 const Fees = require('../models/feesModel');
 const Payment = require('../models/paymentModel');
 const User = require('../models/userModel');
-const { sendWhatsAppMessage } = require('../services/whatsappService');
+// const { sendWhatsAppMessage } = require('../services/whatsappService');
 require('dotenv').config();
 
 function isMasterProcess() {
@@ -102,7 +102,7 @@ async function startFeeScheduler() {
                         const student = await User.findById(p.studentId);
                         if (student && student.phone) {
                             const message = `Reminder: Dear ${student.name}, your fees for ${p.month} ${p.year} are unpaid. Please pay to avoid penalties.`;
-                            await sendWhatsAppMessage(student.phone, message);
+                            // await sendWhatsAppMessage(student.phone, message);
                         }
                         else if (student) {
                             console.log(`[FeeScheduler] Student ${student._id} (${student.name}) has no phone number; skipping WhatsApp reminder.`);
@@ -123,7 +123,7 @@ async function startFeeScheduler() {
                         try {
                             if (student && student.phone) {
                                 const message = `Reminder: Dear ${student.name}, Fees is pending for the ${monthName} ${year}. Please pay to avoid penalties.`;
-                                await sendWhatsAppMessage(student.phone, message);
+                                // await sendWhatsAppMessage(student.phone, message);
                             } else if (student) {
                                 console.log(`[FeeScheduler] Student ${student._id} (${student.name}) has no phone number; skipping WhatsApp reminder (no record).`);
                             }
@@ -175,7 +175,7 @@ async function startFeeScheduler() {
                         const student = await User.findById(p.studentId);
                         if (student && student.phone) {
                             const message = `Reminder: Dear ${student.name}, your fees for ${p.month} ${p.year} are unpaid. A penalty has been applied. Please pay at the earliest.`;
-                            await sendWhatsAppMessage(student.phone, message);
+                            // await sendWhatsAppMessage(student.phone, message);
                         }
                         else if (student) {
                             console.log(`[FeeScheduler] Student ${student._id} (${student.name}) has no phone number; skipping WhatsApp reminder.`);
@@ -195,7 +195,7 @@ async function startFeeScheduler() {
                         try {
                             if (student && student.phone) {
                                 const message = `Reminder: Dear ${student.name}, we have no record of your fees for ${monthName} ${year}. A penalty has been applied. Please pay at the earliest.`;
-                                await sendWhatsAppMessage(student.phone, message);
+                                // await sendWhatsAppMessage(student.phone, message);
                             } else if (student) {
                                 console.log(`[FeeScheduler] Student ${student._id} (${student.name}) has no phone number; skipping WhatsApp reminder (no record).`);
                             }
