@@ -5,6 +5,8 @@ import 'package:fluttertoast/fluttertoast.dart';
 import 'package:frontend/controllers/auth_controller.dart';
 import 'package:frontend/screens/auth/approval_pending.dart';
 import 'package:frontend/screens/auth/login_page.dart';
+import 'package:intl_phone_field/intl_phone_field.dart';
+import 'package:intl_phone_field/phone_number.dart';
 
 class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key});
@@ -17,6 +19,7 @@ class _SignUpPageState extends State<SignUpPage> {
   bool _isLoading = false;
   final TextEditingController _email = TextEditingController();
   final TextEditingController _phone = TextEditingController();
+  String completeNumber= '';
   final TextEditingController _password = TextEditingController();
   final TextEditingController _confirmPasswordController = TextEditingController();
   final TextEditingController _name = TextEditingController();
@@ -46,17 +49,45 @@ class _SignUpPageState extends State<SignUpPage> {
     if (text.isEmpty) return true; // ✅ allow empty (optional field)
     return emailRegex.hasMatch(text);
   }
+  bool _isNameValid = false;
+    bool _isPhoneValid = false;
+  bool _validateName(String name) {
+  final nameRegex = RegExp(r'^[A-Za-z\s]+$');
+  return nameRegex.hasMatch(name.trim());
+}
+
+void _onNameChanged(String name) {
+  setState(() {
+    _isNameValid = _validateName(name);
+  });
+}
+
 
   bool isTeacher = true; // default switch = Student
   String _selectedRole = "teacher"; // same as default
 
-
   bool isValidIndianPhoneNumber(String input) {
-  final trimmed = input.trim();
-  if (input.isEmpty) return true;
-  final regex = RegExp(r'^[0-9]{10}$');
-  return regex.hasMatch(trimmed);
-}
+    final trimmed = input.trim();
+    if (input.isEmpty) return true;
+    final regex = RegExp(r'^[0-9]{10}$');
+    return regex.hasMatch(trimmed);
+  }
+
+  bool isValidPhoneNumber(PhoneNumber phone) {
+    final number = phone.number;
+    final countryCode = phone.countryCode;
+
+    // Allow only digits
+    final onlyDigits = RegExp(r'^[0-9]+$');
+    if (!onlyDigits.hasMatch(number)) return false;
+
+    // Country-specific rule
+    if (countryCode == '+91') {
+      return number.length == 10; // India: 10 digits
+    } else {
+      return number.length >= 6 && number.length <= 15;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -105,45 +136,67 @@ class _SignUpPageState extends State<SignUpPage> {
                                 const SizedBox(height: 20),
                                 TextField(
                                   controller: _name,
+                                  onChanged: _onNameChanged,
                                   decoration: InputDecoration(
                                     labelText: 'Name',
                                     fillColor: Colors.grey[200],
-                                    prefixIcon: Icon(Icons.person),
+                                    prefixIcon: const Icon(Icons.person),
+                                    suffixIcon: _name.text.isEmpty
+                                        ? null
+                                        : (_isNameValid
+                                            ? const Icon(Icons.check_circle,
+                                                color: Colors.green)
+                                            : const Icon(Icons.cancel,
+                                                color: Colors.red)),
                                     enabledBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(20),
                                       borderSide:
-                                          BorderSide(color: Colors.grey),
+                                          const BorderSide(color: Colors.grey),
                                     ),
                                     focusedBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(20),
-                                      borderSide: BorderSide(
-                                          color: Colors.teal, width: 2),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(
-                                  height: 20,
-                                ),
-                                TextField(
-                                  controller: _phone,
-                                  keyboardType: TextInputType.number,
-                                  decoration: InputDecoration(
-                                    labelText: 'Phone Number',
-                                    fillColor: Colors.grey[200],
-                                    prefixIcon: Icon(Icons.person),
-                                    enabledBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(20),
-                                      borderSide:
-                                          BorderSide(color: Colors.grey),
-                                    ),
-                                    focusedBorder: OutlineInputBorder(
-                                      borderRadius: BorderRadius.circular(20),
-                                      borderSide: BorderSide(
+                                      borderSide: const BorderSide(
                                           color: Colors.teal, width: 2),
                                     ),
                                   ),
                                 ),
                                 SizedBox(height: 20),
+                                IntlPhoneField(
+                                  controller: _phone,
+                                  initialCountryCode: 'IN',
+                                  decoration: InputDecoration(
+                                    labelText: 'Phone Number',
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    suffixIcon: _phone.text.isEmpty
+                                        ? null
+                                        : (_isPhoneValid
+                                            ? const Icon(Icons.check_circle,
+                                                color: Colors.green)
+                                            : const Icon(Icons.cancel,
+                                                color: Colors.red)),
+                                  ),
+                                  onChanged: (phone) {
+                                    setState(() {
+                                      completeNumber = phone
+                                          .completeNumber; // e.g. +919876543210
+                                      _isPhoneValid = isValidPhoneNumber(phone);
+                                    });
+                                  },
+                                  onCountryChanged: (country) {
+                                    // Re-validate if user switches country
+                                    setState(() {
+                                      _isPhoneValid = isValidPhoneNumber(
+                                        PhoneNumber(
+                                          countryISOCode: country.code,
+                                          countryCode: '+${country.dialCode}',
+                                          number: _phone.text,
+                                        ),
+                                      );
+                                    });
+                                  },
+                                ),
                                 TextField(
                                   controller: _email,
                                   keyboardType: TextInputType.emailAddress,
@@ -262,11 +315,16 @@ class _SignUpPageState extends State<SignUpPage> {
                                               Fluttertoast.showToast(
                                                   msg: 'Name Required');
                                               return;
+                                            } else if (!_isNameValid) {
+                                              Fluttertoast.showToast(
+                                                  msg:
+                                                      'Name cannot contain special characters or numbers');
+                                              return;
                                             } else if (!isValidIndianPhoneNumber(
                                                 _phone.text)) {
                                               Fluttertoast.showToast(
                                                   msg: 'Invalid phone number');
-                                                  return;
+                                              return;
                                             } else if (!isEmailValid) {
                                               Fluttertoast.showToast(
                                                   msg: 'Invalid Email');
