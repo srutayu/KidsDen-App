@@ -4,6 +4,21 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 
+// Add ISO timestamps to all console output for better log tracing
+
+// if (!global.__console_timestamps_patched) {
+//   const methods = ['log', 'info', 'warn', 'error', 'debug'];
+//   methods.forEach((m) => {
+//     const orig = console[m] ? console[m].bind(console) : null;
+//     if (!orig) return;
+//     console[m] = (...args) => {
+//       const ts = new Date().toISOString();
+//       orig(`[${ts}]`, ...args);
+//     };
+//   });
+//   global.__console_timestamps_patched = true;
+// }
+
 const connectDB = require('./config/db');
 const errorHandler = require('./middleware/errorHandler');
 const { startFeeScheduler } = require('./scheduler/feeScheduler.js');
@@ -20,8 +35,6 @@ const port = process.env.PORT || 3000;
 
 if (cluster.isMaster) {
   console.log(`Master ${process.pid} is running`);
-  initWhatsApp();
-
   // Fork workers for each CPU core
   for (let i = 0; i < numCPUs; i++) {
     cluster.fork();
@@ -74,4 +87,14 @@ if (cluster.isMaster) {
     app.listen(port, () => {
       console.log(`Worker ${process.pid} started and listening on port ${port}`);
     });
+    if (process.env.DISABLE_WHATSAPP !== 'true') {
+      // Fire-and-forget initialization; initWhatsApp handles its own errors and returns null on failure.
+      initWhatsApp().then((c) => {
+        if (!c) console.warn('[index] WhatsApp client not initialized. See whatsappService logs for details.');
+      }).catch(err => {
+        console.error('[index] Unexpected error while initializing WhatsApp client:', err && err.message ? err.message : err);
+      });
+    } else {
+      console.log('[index] WhatsApp initialization disabled via DISABLE_WHATSAPP env var.');
+    }
 }
