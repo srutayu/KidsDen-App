@@ -2,7 +2,7 @@ const razorpay = require("../config/razorpay");
 const Payment = require("../models/paymentModel");
 const User = require("../models/userModel");
 const {sendPaymentConfirmationEmail} = require("../services/emailServices");
-const { sendWhatsAppMessage } = require('../services/whatsappService');
+const { sendWhatsAppMessage, sendTextMessage } = require('../services/whatsappService');
 const Fees = require("../models/feesModel");
 const Class = require("../models/classModel");
 
@@ -104,7 +104,7 @@ exports.verifyPayment = async (req, res) => {
         if (student.phone) {
           const phone = student.phone.startsWith('whatsapp:') ? student.phone : student.phone;
           const msg = `Payment received: Hi ${student.name}, we received your payment of INR ${amount} on ${payment.updatedAt.toLocaleDateString()}. Thank you!`;
-          await sendWhatsAppMessage(phone, msg);
+          await sendTextMessage(phone, msg);
         }
       } catch (e) {
         console.error('WhatsApp send error (verifyPayment):', e && e.message ? e.message : e);
@@ -268,7 +268,7 @@ exports.updatePaymentRecordForOfflinePayment = async (req, res) => {
     if (student && student.phone) {
       const phone = student.phone.startsWith('whatsapp:') ? student.phone : student.phone;
       const msg = `Payment received: Hi ${student.name}, we received your payment of INR ${fees.amount} on ${payment.updatedAt.toLocaleDateString()}. Thank you!`;
-      sendWhatsAppMessage(phone, msg).catch(e => console.error('WhatsApp send error (offline):', e && e.message ? e.message : e));
+      sendTextMessage(phone, msg).catch(e => console.error('WhatsApp send error (offline):', e && e.message ? e.message : e));
     }
   } catch (error) {
     console.error(error);

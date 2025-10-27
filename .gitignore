@@ -10,7 +10,14 @@ README.md
 **/.env
 .env.*
 
-logs
+/logs
 .vscode
 frontend/lib/constants/url.dart
+/backend/.wwebjs_auth
+/backend/.wwebjs_cache
+# Ensure log directories are ignored (root and container-mounted)
+/logs/
+/app/logs/
+/backend/logs/
+/chatbackend/logs/
 

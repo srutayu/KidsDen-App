@@ -70,7 +70,7 @@ export CHATBACKEND_PORT=${CHATBACKEND_PORT:-8000}
 # Create log directories and ensure proper permissions
 mkdir -p /app/logs
 # Fix permissions in case of volume mount
-chmod 755 /app/logs 2>/dev/null || true
+chmod 777 /app/logs 2>/dev/null || true
 # Ensure we can write to the logs directory
 touch /app/logs/test.log 2>/dev/null && rm -f /app/logs/test.log || {
     echo "===> Warning: Cannot write to /app/logs directory"
