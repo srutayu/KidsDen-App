@@ -83,17 +83,42 @@
 // services/whatsappService.js
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
+const fs = require('fs');
 
-let client;
+let client = null;
 
 async function initWhatsApp() {
   if (client) return client;
 
+  // Build puppeteer options with a sensible executablePath if available.
+  const puppeteerOptions = { args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'] };
+
+  let exePath = process.env.PUPPETEER_EXECUTABLE_PATH || process.env.CHROME_PATH || '';
+  if (!exePath) {
+    if (process.platform === 'win32') {
+      const candidates = [
+        'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+        'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe'
+      ];
+      exePath = candidates.find(p => fs.existsSync(p));
+    } else if (process.platform === 'linux') {
+      const candidates = ['/usr/bin/chromium-browser', '/usr/bin/chromium', '/usr/bin/google-chrome-stable', '/usr/bin/google-chrome'];
+      exePath = candidates.find(p => fs.existsSync(p));
+    } else if (process.platform === 'darwin') {
+      const candidates = ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'];
+      exePath = candidates.find(p => fs.existsSync(p));
+    }
+  }
+
+  if (exePath) {
+    puppeteerOptions.executablePath = exePath;
+    console.log('[WhatsAppService] Using browser executable:', exePath);
+  } else {
+    console.warn('[WhatsAppService] No browser executable found automatically. Set PUPPETEER_EXECUTABLE_PATH or CHROME_PATH env var, or install Chrome/Chromium in the container.');
+  }
+
   client = new Client({
-    puppeteer: {
-    executablePath: '/usr/bin/chromium-browser',
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-  },
+    puppeteer: puppeteerOptions,
     authStrategy: new LocalAuth({ dataPath: './.wwebjs_auth' }),
   });
 
@@ -109,11 +134,27 @@ async function initWhatsApp() {
 
   client.on('disconnected', reason => {
     console.log('⚠️ Client disconnected:', reason);
-    client.initialize();
+    setTimeout(() => {
+      if (client) {
+        client.initialize().catch(err => console.error('[WhatsAppService] Error re-initializing client after disconnect:', err));
+      }
+    }, 5000);
   });
 
-  await client.initialize();
-  return client;
+  try {
+    await client.initialize();
+    return client;
+  } catch (err) {
+    console.error('[WhatsAppService] Failed to initialize WhatsApp client (puppeteer/browser error):', err && err.message ? err.message : err);
+    // client.destroy() is async and may reject; await and catch so the rejection doesn't bubble out.
+    try {
+      if (client && typeof client.destroy === 'function') {
+        await client.destroy().catch(() => {});
+      }
+    } catch (e) { /* ignore */ }
+    client = null;
+    return null;
+  }
 }
 
 async function sendTextMessage(toE164, message) {
