@@ -1,32 +1,68 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
+import 'package:frontend/constants/url.dart';
+import 'package:frontend/provider/auth_provider.dart';
+import 'package:provider/provider.dart';
 import 'dart:io';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
+import 'package:http/http.dart' as http;
 
 class VideoPlayerScreen extends StatefulWidget {
   final String videoUrl; // can be a network URL or local file path
-  final bool isLocal;    // true if videoUrl is a local file
+  final bool isLocal;
+  final String senderID;  
 
   const VideoPlayerScreen({
-    Key? key,
+    super.key,
     required this.videoUrl,
     required this.isLocal,
-  }) : super(key: key);
+    required this.senderID
+  });
 
   @override
   State<VideoPlayerScreen> createState() => _VideoPlayerScreenState();
 }
 
 class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
+  late String token;
+  String senderName='';
   late VideoPlayerController _videoController;
   ChewieController? _chewieController;
-  bool _isLoading = true;
+  bool _isLoading = false;
 
   @override
   void initState() {
     super.initState();
+    token = Provider.of<AuthProvider>(context, listen: false).token!;
+    fetchUserName(widget.senderID, token);
     _initializePlayer();
   }
+   Future<void> fetchUserName(String userId, String authToken) async {
+  if (userId.isEmpty) return;
+  try {
+    final uri = Uri.parse('${URL.chatURL}/classes/get-user-name?userId=$userId');
+    final response = await http.get(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $authToken',
+        'Content-Type': 'application/json',
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      setState(() {
+        senderName= data['name'];
+      });
+    } else {
+      return;
+    }
+  } catch (e) {
+    return;
+  }
+}
 
   Future<void> _initializePlayer() async {
     try {
@@ -34,6 +70,7 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
       if (widget.isLocal) {
         _videoController = VideoPlayerController.file(File(widget.videoUrl));
       } else {
+        // ignore: deprecated_member_use
         _videoController = VideoPlayerController.network(widget.videoUrl);
       }
 
@@ -68,18 +105,38 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     super.dispose();
   }
 
-  @override
+ @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDarkMode = theme.brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: Colors.black,
+      backgroundColor: isDarkMode ? Colors.black : Colors.white,
       appBar: AppBar(
-        title: const Text('Video Player'),
-        backgroundColor: const Color.fromARGB(255, 255, 255, 255),
+        title: Text(
+          senderName,
+          style: TextStyle(
+            color: isDarkMode ? Colors.white : Colors.black,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        backgroundColor: isDarkMode ? Colors.black : Colors.white,
+        elevation: 0,
+        iconTheme: IconThemeData(
+          color: isDarkMode ? Colors.white : Colors.black,
+        ),
+        centerTitle: true,
       ),
       body: Center(
-        child: _isLoading
-            ? const CircularProgressIndicator(color: Colors.white)
-            : Chewie(controller: _chewieController!),
+        child: _isLoading || _chewieController == null
+            ? const CircularProgressIndicator()
+            : (_chewieController!.videoPlayerController.value.isInitialized
+                ? AspectRatio(
+                    aspectRatio: _chewieController!
+                        .videoPlayerController.value.aspectRatio,
+                    child: Chewie(controller: _chewieController!),
+                  )
+                : const CircularProgressIndicator()),
       ),
     );
   }

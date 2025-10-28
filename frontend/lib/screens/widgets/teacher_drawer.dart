@@ -3,9 +3,9 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:frontend/controllers/auth_controller.dart';
 import 'package:frontend/provider/auth_provider.dart';
 import 'package:frontend/provider/user_data_provider.dart';
-import 'package:frontend/screens/admin/daily_update.dart';
+import 'package:frontend/screens/admin/update/broadcast/daily_update.dart';
 import 'package:frontend/screens/auth/onboarding_page.dart';
-import 'package:frontend/screens/chat/broadcast_screen.dart';
+import 'package:frontend/screens/admin/update/broadcast/broadcast_screen.dart';
 import 'package:provider/provider.dart';
 
 class TeacherDrawer extends StatefulWidget {
@@ -62,7 +62,7 @@ class _TeacherDrawerState extends State<TeacherDrawer> {
               Navigator.pop(context); // closes the drawer
             },
           ),
-          ListTile(
+         ListTile(
             leading: const Icon(Icons.campaign),
             title: const Text('Daily Update'),
             onTap: () {
@@ -75,13 +75,13 @@ class _TeacherDrawerState extends State<TeacherDrawer> {
             },
           ),
           ListTile(
-            leading: const Icon(Icons.speaker),
-            title: const Text('Send Broadcast'),
+            leading: const Icon(Icons.article),
+            title: const Text('Broadcast'),
             onTap: () {
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => BroadcastScreen(authToken: token, userId: userId, userRole: role,),
+                  builder: (context) => BroadcastScreen(authToken: token,userId: userId, userRole: role),
                 ),
               );
             },

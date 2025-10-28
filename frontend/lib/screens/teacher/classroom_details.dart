@@ -1,3 +1,4 @@
+import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:flutter/material.dart';
 import 'package:frontend/controllers/teacher_controller.dart'; // TeacherController file
 import 'package:frontend/models/classroom_model.dart';
@@ -231,24 +232,104 @@ Future<void> _initializeData() async {
         padding: const EdgeInsets.all(16),
         child: Column(
           children: [
-            DropdownButton<ClassroomModel>(
-              isExpanded: true,
-              value: _selectedClass,
-              hint: const Text('Select Class'),
-              items: _classes.map((cls) {
-                return DropdownMenuItem(
-                  value: cls,
-                  child: Text(cls.name),
-                );
-              }).toList(),
-              onChanged: (cls) {
-                if (cls != null) {
-                  setState(() {
-                    _selectedClass = cls;
-                  });
-                  _loadClassMembers(cls.id);
-                }
-              },
+           DropdownButtonHideUnderline(
+              child: DropdownButton2<ClassroomModel>(
+                isExpanded: true,
+                value: _selectedClass,
+                hint: Text(
+                  'Select Class',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.grey.shade400 // softer grey for dark mode
+                        : Colors.grey.shade600, // darker grey for light mode
+                  ),
+                ),
+                items: _classes.map((cls) {
+                  return DropdownMenuItem(
+                    value: cls,
+                    child: Text(
+                      cls.name,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w500,
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.white
+                            : Colors.black87,
+                      ),
+                    ),
+                  );
+                }).toList(),
+                onChanged: (cls) {
+                  if (cls != null) {
+                    setState(() {
+                      _selectedClass = cls;
+                    });
+                    _loadClassMembers(cls.id);
+                  }
+                },
+            
+                // 🎨 Button styling
+                buttonStyleData: ButtonStyleData(
+                  height: 48,
+                  padding: const EdgeInsets.symmetric(horizontal: 14),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? const Color(0xFF2A2A2A)
+                        : const Color(0xFFF7F7F7),
+                    border: Border.all(
+                      color: Theme.of(context).brightness == Brightness.dark
+                          ? Colors.grey.shade700
+                          : Colors.grey.shade300,
+                    ),
+                  ),
+                ),
+            
+                // 📋 Dropdown menu styling
+                dropdownStyleData: DropdownStyleData(
+                  maxHeight: 300,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? const Color(0xFF1E1E1E)
+                        : Colors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.black45
+                            : Colors.grey.withOpacity(0.2),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                ),
+            
+                // ⬇️ Dropdown arrow color
+                iconStyleData: IconStyleData(
+                  icon: Icon(
+                    Icons.arrow_drop_down_rounded,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.white70
+                        : Colors.black87,
+                  ),
+                ),
+            
+                // ✨ Style for selected item
+                menuItemStyleData: MenuItemStyleData(
+                  overlayColor: WidgetStateProperty.resolveWith<Color?>(
+                    (states) {
+                      if (states.contains(WidgetState.hovered) ||
+                          states.contains(WidgetState.focused)) {
+                        return Theme.of(context).brightness == Brightness.dark
+                            ? Colors.white10
+                            : Colors.black12;
+                      }
+                      return null;
+                    },
+                  ),
+                ),
+              ),
             ),
             const SizedBox(height: 20),
             Expanded(child: _buildStudentList()),

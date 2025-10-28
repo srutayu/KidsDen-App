@@ -9,6 +9,7 @@ import 'package:frontend/screens/chat/pdf_viewer.dart';
 import 'package:frontend/screens/chat/videoPlayer.dart';
 import 'package:frontend/services/s3_services.dart';
 import 'package:intl/intl.dart';
+import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:provider/provider.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
@@ -172,6 +173,11 @@ void _precachePreviousImages(int currentIndex) async {
     return media.reversed.toList();
   }
 
+  Future<void> openFile(String filePath) async {
+  final result = await OpenFilex.open(filePath);
+  print('Result: ${result.message}');
+}
+
 
   Future<String> downloadPdf(String url, String filename) async {
     final dir = await getApplicationDocumentsDirectory();
@@ -219,8 +225,6 @@ void _precachePreviousImages(int currentIndex) async {
         // If widget is already disposed, avoid calling setState
         if (!mounted) {
           messages = data;
-          print(
-              'Fetched ${messages.length} messages for class ${widget.classId} (widget disposed before update)');
           return;
         }
         setState(() {
@@ -330,12 +334,14 @@ void _precachePreviousImages(int currentIndex) async {
                   try {
                     final existingContent = messages[idx]['content'];
                     dynamic existingParsed = existingContent;
-                    if (existingContent is String)
+                    if (existingContent is String) {
                       existingParsed = json.decode(existingContent);
+                    }
 
                     dynamic serverParsed = formattedMessage['content'];
-                    if (serverParsed is String)
+                    if (serverParsed is String) {
                       serverParsed = json.decode(serverParsed);
+                    }
 
                     if (existingParsed is Map &&
                         existingParsed['localPreviewBase64'] != null &&
@@ -422,7 +428,7 @@ Future<void> uploadFile() async {
     mounted: mounted,
   );
 }
-Widget _buildFilePreview(Map parsed, String messageId) {
+Widget _buildFilePreview(Map parsed, String messageId, String sender) {
     final String url = parsed['url'] ?? '';
     final String name = parsed['name'] ?? '';
     final String mime = parsed['mime'] ?? '';
@@ -482,55 +488,77 @@ Widget _buildFilePreview(Map parsed, String messageId) {
                         ? Container(
                             height: 160,
                             color: Colors.black12,
-                            child:
-                                const Center(child: Icon(Icons.broken_image)),
-                          )
-                        : Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              CachedNetworkImage(
-                                imageUrl: url,
-                                height: 160,
-                                fit: BoxFit.cover,
-                                placeholder: (context, _) => const SizedBox(
-                                  height: 160,
-                                  child: Center(
-                                      child: CircularProgressIndicator()),
-                                ),
-                                errorWidget: (context, error, stackTrace) {
-                                  Future.microtask(() => _ensureUrlForParsed(
-                                      parsed, messageId,
-                                      force: true));
-                                  return Container(
-                                    height: 160,
-                                    color: Colors.black12,
-                                    child: const Center(
-                                        child: Icon(Icons.broken_image)),
-                                  );
-                                },
-                              ),
-                              Positioned(
-                                bottom: 8,
-                                right: 8,
-                                child: IconButton(
-                                  icon: const Icon(Icons.download_rounded,
-                                      color: Colors.white),
-                                  onPressed: () async {
-                                    try {
-                                      await FileUtils.downloadFile(url, name);
-                                      (context as Element).markNeedsBuild();
-                                    } catch (e) {}
-                                  },
-                                ),
+                            child: const Center(
+                                    child: Icon(Icons.broken_image)),
                               )
-                            ],
-                          )))
-                : isVideo
-                    ? FutureBuilder<String>(
-                        future: FileUtils.getVideoThumbnail(exists, url, name),
-                        builder: (context, snap) {
-                          if (!snap.hasData) {
-                            return SizedBox(
+                            : Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  CachedNetworkImage(
+                                    imageUrl: url,
+                                    height: 160,
+                                    fit: BoxFit.cover,
+                                    placeholder: (context, _) => const SizedBox(
+                                      height: 160,
+                                      child: Center(
+                                          child: CircularProgressIndicator()),
+                                    ),
+                                    errorWidget: (context, error, stackTrace) {
+                                      Future.microtask(() =>
+                                          _ensureUrlForParsed(parsed, messageId,
+                                              force: true));
+                                      return Container(
+                                        height: 160,
+                                        color: Colors.black12,
+                                        child: const Center(
+                                            child: Icon(Icons.broken_image)),
+                                      );
+                                    },
+                                    imageBuilder: (context, imageProvider) {
+                                      // ✅ Trigger auto-download when image successfully loads
+                                      Future.microtask(() async {
+                                        try {
+                                          await FileUtils.downloadFile(
+                                              url, name);
+                                        } catch (e) {
+                                          debugPrint(
+                                              'Auto-download failed: $e');
+                                        }
+                                      });
+
+                                      return Image(
+                                        image: imageProvider,
+                                        height: 160,
+                                        fit: BoxFit.cover,
+                                      );
+                                    },
+                                  ),
+                                  Positioned(
+                                    bottom: 8,
+                                    right: 8,
+                                    child: IconButton(
+                                      icon: const Icon(
+                                        Icons.download_rounded,
+                                        color: Color.fromARGB(255, 145, 35, 35),
+                                      ),
+                                      onPressed: () async {
+                                        try {
+                                          await FileUtils.downloadFile(
+                                              url, name);
+                                          (context as Element).markNeedsBuild();
+                                        } catch (e) {}
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              )))
+                    : isVideo
+                        ? FutureBuilder<String>(
+                            future:
+                                FileUtils.getVideoThumbnail(exists, url, name),
+                            builder: (context, snap) {
+                              if (!snap.hasData) {
+                                return SizedBox(
                               height: 160,
                               width: MediaQuery.of(context).size.width * 0.32,
                               child: Center(child: CircularProgressIndicator()),
@@ -633,7 +661,7 @@ Widget _buildFilePreview(Map parsed, String messageId) {
               if (context.mounted) {
                 Navigator.of(context).push(MaterialPageRoute(
                   builder: (_) =>
-                      VideoPlayerScreen(videoUrl: path, isLocal: true),
+                      VideoPlayerScreen(videoUrl: path, isLocal: true, senderID: sender),
                 ));
               }
               
@@ -644,7 +672,7 @@ Widget _buildFilePreview(Map parsed, String messageId) {
               if (context.mounted) {
                 Navigator.of(context).push(
                   MaterialPageRoute(
-                    builder: (_) => LocalImageViewer(filePath: path),
+                    builder: (_) => LocalImageViewer(filePath: path, senderID: sender ),
                   ),
                 );
               }
@@ -657,6 +685,12 @@ Widget _buildFilePreview(Map parsed, String messageId) {
               Navigator.of(context).push(MaterialPageRoute(
                 builder: (_) => PdfViewerScreen(filePath: path),
               ));
+            }
+            else{
+              final path = exists
+                ? await FileUtils.getLocalFilePath(name)
+                : await FileUtils.downloadFile(url, name);
+                openFile(path);
             }
           },
           child: isVideo
@@ -918,7 +952,7 @@ Widget _buildFilePreview(Map parsed, String messageId) {
                       // by the outer wrapper (below) which calls _attemptDeleteMessage.
                       return Stack(
                         children: [
-                          _buildFilePreview(parsed, idKey),
+                          _buildFilePreview(parsed, idKey, senderId),
                           if (isUploading)
                             Positioned.fill(
                               child: Container(
