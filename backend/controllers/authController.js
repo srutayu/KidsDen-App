@@ -3,7 +3,7 @@ const redisClient = require('../config/redisClient');
 const generateToken = require('../utils/generateToken');
 const jwt = require('jsonwebtoken');
 const { accountCreatedConfirmationEmail, sendPasswordOtpEmail } = require('../services/emailServices');
-const { sendWhatsAppMessage } = require('../services/whatsappService');
+const { sendTextMessage } = require('../services/whatsappService');
 require('dotenv').config();
 
 // Register User (email and phone both optional; if provided must be unique)
@@ -49,7 +49,7 @@ exports.registerUser = async (req, res) => {
         }
 
         // Check duplicates only when email/phone are provided
-        if (email) {
+        if (email && email!=null) {
             const existingByEmail = await User.findOne({ email });
             if (existingByEmail) {
                 return res.status(400).json({ message: 'E-mail ID already used' });
@@ -334,7 +334,7 @@ exports.requestPasswordOtp = async (req, res) => {
                         to = `+${to}`;
                     }
                 }
-                await sendWhatsAppMessage(to, message);
+                await sendTextMessage(to, message);
                 waSuccess = true;
             } catch (sendErr) {
                 console.error('[Auth] Failed to send OTP via WhatsApp:', sendErr);
