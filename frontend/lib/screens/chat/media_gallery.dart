@@ -73,7 +73,7 @@ class MediaGalleryScreen extends StatelessWidget {
                                 Navigator.of(context).push(
                                   MaterialPageRoute(
                                     builder: (_) =>
-                                        LocalImageViewer(filePath: file.path),
+                                        LocalImageViewer(filePath: file.path, senderID: item['sender'],),
                                   ),
                                 );
                               },
@@ -92,7 +92,7 @@ class MediaGalleryScreen extends StatelessWidget {
                                   Navigator.of(context).push(
                                     MaterialPageRoute(
                                       builder: (_) =>
-                                          LocalImageViewer(filePath: path),
+                                          LocalImageViewer(filePath: path, senderID: item['sender'],),
                                     ),
                                   );
                                 }
@@ -103,32 +103,35 @@ class MediaGalleryScreen extends StatelessWidget {
                               ),
                             );
                           }
-                        }
-                       else if (mime.startsWith('video/')) {
-  return FutureBuilder<String>(
-    future: FileUtils.getVideoThumbnail(file != null, url, item['name']!),
-    builder: (context, snapshot) {
-      final hasThumbnail = snapshot.hasData && snapshot.data!.isNotEmpty;
+                        } else if (mime.startsWith('video/')) {
+                          return FutureBuilder<String>(
+                            future: FileUtils.getVideoThumbnail(
+                                file != null, url, item['name']!),
+                            builder: (context, snapshot) {
+                              final hasThumbnail =
+                                  snapshot.hasData && snapshot.data!.isNotEmpty;
 
-      return GestureDetector(
-        onTap: () async {
-          final path = file != null
-              ? file.path
-              : await FileUtils.downloadFile(url, item['name']!);
-          if (context.mounted) {
-            Navigator.of(context).push(MaterialPageRoute(
-              builder: (_) => VideoPlayerScreen(
-                videoUrl: path,
-                isLocal: true,
-              ),
-            ));
-          }
-        },
-        child: Stack(
-          alignment: Alignment.center,
-          children: [
-            // 🎞️ Background: Either video thumbnail or fallback container
-            Positioned.fill(
+                              return GestureDetector(
+                                onTap: () async {
+                                  final path = file != null
+                                      ? file.path
+                                      : await FileUtils.downloadFile(
+                                          url, item['name']!);
+                                  if (context.mounted) {
+                                    Navigator.of(context)
+                                        .push(MaterialPageRoute(
+                                      builder: (_) => VideoPlayerScreen(
+                                          videoUrl: path,
+                                          isLocal: true,
+                                          senderID: item['sender']),
+                                    ));
+                                  }
+                                },
+                                child: Stack(
+                                  alignment: Alignment.center,
+                                  children: [
+                                    // 🎞️ Background: Either video thumbnail or fallback container
+                                    Positioned.fill(
               child: hasThumbnail
                   ? ClipRRect(
                       borderRadius: BorderRadius.circular(8),

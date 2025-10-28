@@ -126,7 +126,6 @@ class UploadService {
           // Compress videos
           else if (_isVideo(ext)) {
             final compressedFile = await _compressVideo(f);
-            print('after compression');
             if (compressedFile != null) {
               bytes = await compressedFile.readAsBytes();
               // Clean up temporary file after reading
@@ -248,7 +247,6 @@ class UploadService {
         format: CompressFormat.jpeg,
       );
       
-      print('Image compressed: ${bytes.length} -> ${result.length} bytes');
       return result;
     } catch (e) {
       print('Error compressing image: $e');

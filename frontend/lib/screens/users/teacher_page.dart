@@ -74,7 +74,8 @@ class _TeacherPageState extends State<TeacherPage> {
           ),
           backgroundColor:  Color.fromARGB(255, 52, 161, 88),
           actions: [
-             Consumer<ThemeProvider>(
+            if(selectedIndex==0)
+            Consumer<ThemeProvider>(
               builder: (context, themeProvider, _) => IconButton(
                 icon: Icon(
                   themeProvider.isDarkMode
