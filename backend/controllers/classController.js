@@ -9,6 +9,7 @@ const messageSchema = require('../models/messageSchema');
 let ChatMessage;
 let chatDbConnected = false;
 const Payment = require('../models/paymentModel');
+const StudentAttendance = require('../models/studentAttendanceModel');
 
 //create contoller to create a class and all admin to list of teachers. 
 
@@ -163,6 +164,8 @@ exports.deleteClass = async (req, res) => {
                 { assignedClasses: classObj.name },
                 { $pull: { assignedClasses: classObj.name } }
             ),
+            StudentAttendance.deleteMany({ classId }),
+
             ChatMessage.deleteMany({ classId }),
             Payment.deleteMany({ classId: classObj.name })
         ]);
