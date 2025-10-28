@@ -13,9 +13,14 @@ exports.protect = async (req, res, next) => {
   if (!token) return res.status(401).json({ message: 'Not authorized, no token' });
 
   // Check if token is blacklisted
-  const isBlacklisted = await client.get(token);
-  if (isBlacklisted) {
-    return res.status(401).json({ message: 'Token revoked, please login again' });
+  try {
+    const isBlacklisted = await client.get(token);
+    if (isBlacklisted) {
+      return res.status(401).json({ message: 'Token revoked, please login again' });
+    }
+  } catch (err) {
+    console.warn('Redis token check failed:', err);
+    // proceed - do not block auth if redis is down; fallback to token verification
   }
 
   try {
@@ -25,7 +30,7 @@ exports.protect = async (req, res, next) => {
     if (!req.user.isApproved) return res.status(403).json({ message: 'Account not approved' });
     next();
   } catch (error) {
-    console.error(error);
-    res.status(401).json({ message: 'Token invalid or expired' });
+    console.error('Auth error:', error);
+    return res.status(401).json({ message: 'Token invalid or expired' });
   }
 };

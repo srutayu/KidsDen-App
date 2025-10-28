@@ -4,7 +4,20 @@
 README.md
 *.md
 
-/chatbackend/.env
-/backend/.env
+# Ignore environment files anywhere in the repo
+.env
+*.env
+**/.env
+.env.*
 
-logs
+/logs
+.vscode
+frontend/lib/constants/url.dart
+/backend/.wwebjs_auth
+/backend/.wwebjs_cache
+# Ensure log directories are ignored (root and container-mounted)
+/logs/
+/app/logs/
+/backend/logs/
+/chatbackend/logs/
+

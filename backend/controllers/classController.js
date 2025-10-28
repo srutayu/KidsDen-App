@@ -9,6 +9,7 @@ const messageSchema = require('../models/messageSchema');
 let ChatMessage;
 let chatDbConnected = false;
 const Payment = require('../models/paymentModel');
+const StudentAttendance = require('../models/studentAttendanceModel');
 
 //create contoller to create a class and all admin to list of teachers. 
 
@@ -163,6 +164,7 @@ exports.deleteClass = async (req, res) => {
                 { assignedClasses: classObj.name },
                 { $pull: { assignedClasses: classObj.name } }
             ),
+            StudentAttendance.deleteMany({ classId }),
             ChatMessage.deleteMany({ classId }),
             Payment.deleteMany({ classId: classObj.name })
         ]);
@@ -306,6 +308,7 @@ exports.getTeachersNotInAClass = async (req, res) => {
 
     const teachersNotAssigned = await User.find({
       role: 'teacher',
+      isApproved: true,
       _id: { $nin: assignedTeacherIds }
     }).select('_id name');
 
@@ -392,7 +395,10 @@ exports.getStudentsNotInAnyClass = async (req, res) => {
 
 exports.getTeachers = async (req, res) => {
     try {
-        const teachers = await User.find({ role: 'teacher' }).select('_id name email');
+        const teachers = await User.find({ role: 'teacher', isApproved: true }).select('_id name email');
+        if(!teachers || teachers.length === 0) {
+            return res.status(404).json({ message: 'No teachers found' });
+        }
         res.json({ teachers });
     } catch (error) {
         console.error(error);
