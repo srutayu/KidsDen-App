@@ -392,7 +392,10 @@ exports.getStudentsNotInAnyClass = async (req, res) => {
 
 exports.getTeachers = async (req, res) => {
     try {
-        const teachers = await User.find({ role: 'teacher' }).select('_id name email');
+        const teachers = await User.find({ role: 'teacher', isApproved: true }).select('_id name email');
+        if(!teachers || teachers.length === 0) {
+            return res.status(404).json({ message: 'No teachers found' });
+        }
         res.json({ teachers });
     } catch (error) {
         console.error(error);

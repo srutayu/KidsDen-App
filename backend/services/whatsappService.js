@@ -151,7 +151,9 @@ async function initWhatsApp() {
       if (client && typeof client.destroy === 'function') {
         await client.destroy().catch(() => {});
       }
-    } catch (e) { /* ignore */ }
+    } catch (e) {
+      console.error('[WhatsAppService] Error destroying client:', e);
+    }
     client = null;
     return null;
   }
