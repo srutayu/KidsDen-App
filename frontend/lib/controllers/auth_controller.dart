@@ -54,7 +54,6 @@ class AuthController {
     }
     body["phone"] = phone;
   }
-  print(body);
 
   final response = await http.post(
     url,
@@ -154,6 +153,150 @@ class AuthController {
     }
     else {
       throw Exception("Failed to fetch login date");
+    }
+  }
+
+  static Future<Map<String, dynamic>> requestOtp(String identifier) async {
+    final url = Uri.parse('$_baseURL/auth/password/request-otp');
+
+    try {
+      // Simple checks to detect if it's an email or phone
+      final isEmail = identifier.contains('@');
+      final isPhone = RegExp(r'^[0-9]{10}$').hasMatch(identifier);
+
+      // Choose the correct field
+      final body = isEmail
+          ? {'email': identifier}
+          : isPhone
+              ? {'phone': identifier}
+              : null;
+
+      if (body == null) {
+        return {
+          'success': false,
+          'message': 'Invalid email or phone number format',
+        };
+      }
+
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': data['message'] ?? 'OTP sent successfully',
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data['message'] ?? 'Failed to request OTP',
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Error: $e',
+      };
+    }
+  }
+
+  static Future<Map<String, dynamic>> verifyOtp(
+      String identifier, String otp) async {
+    final url = Uri.parse('$_baseURL/auth/password/verify-otp');
+
+    try {
+      final isEmail = identifier.contains('@');
+      final isPhone = RegExp(r'^[0-9]{10}$').hasMatch(identifier);
+
+      final body = isEmail
+          ? {'email': identifier, 'otp': otp}
+          : isPhone
+              ? {'phone': identifier, 'otp': otp}
+              : null;
+
+      if (body == null) {
+        return {
+          'success': false,
+          'message': 'Invalid email or phone number format',
+        };
+      }
+
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': data['message'] ?? 'OTP verified successfully',
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data['message'] ?? 'OTP verification failed',
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Error: $e',
+      };
+    }
+  }
+
+   static Future<Map<String, dynamic>> changePassword(String identifier, String newPassword) async {
+    final url = Uri.parse('$_baseURL/auth/password/change');
+
+    try {
+      final isEmail = identifier.contains('@');
+      final isPhone = RegExp(r'^[0-9]{10}$').hasMatch(identifier);
+
+      final body = isEmail
+          ? {'email': identifier, 'newPassword': newPassword}
+          : isPhone
+              ? {'phone': identifier, 'newPassword': newPassword}
+              : null;
+
+      if (body == null) {
+        return {
+          'success': false,
+          'message': 'Invalid email or phone number format',
+        };
+      }
+
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      );
+
+      final data = jsonDecode(response.body);
+
+      if (response.statusCode == 200) {
+        return {
+          'success': true,
+          'message': data['message'] ?? 'Password changed successfully',
+        };
+      } else {
+        return {
+          'success': false,
+          'message': data['message'] ?? 'Failed to change password',
+        };
+      }
+    } catch (e) {
+      return {
+        'success': false,
+        'message': 'Error: $e',
+      };
     }
   }
 }
