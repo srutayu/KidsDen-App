@@ -1,8 +1,12 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:frontend/controllers/auth_controller.dart';
 import 'package:frontend/screens/auth/approval_pending.dart';
 import 'package:frontend/screens/auth/login_page.dart';
+import 'package:intl_phone_field/intl_phone_field.dart';
+import 'package:intl_phone_field/phone_number.dart';
 
 class SignUpPage extends StatefulWidget {
   const SignUpPage({super.key});
@@ -14,6 +18,8 @@ class SignUpPage extends StatefulWidget {
 class _SignUpPageState extends State<SignUpPage> {
   bool _isLoading = false;
   final TextEditingController _email = TextEditingController();
+  final TextEditingController _phone = TextEditingController();
+  String completeNumber= '';
   final TextEditingController _password = TextEditingController();
   final TextEditingController _confirmPasswordController = TextEditingController();
   final TextEditingController _name = TextEditingController();
@@ -38,17 +44,57 @@ class _SignUpPageState extends State<SignUpPage> {
   bool get isMatch => _password.text.isNotEmpty && _confirmPasswordController.text.isNotEmpty&&
       _password.text == _confirmPasswordController.text;
   final RegExp emailRegex = RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$');
-  bool get isEmailValid => emailRegex.hasMatch(_email.text);
+  bool get isEmailValid {
+    final text = _email.text.trim();
+    if (text.isEmpty) return true; // ✅ allow empty (optional field)
+    return emailRegex.hasMatch(text);
+  }
+  bool _isNameValid = false;
+    bool _isPhoneValid = false;
+  bool _validateName(String name) {
+  final nameRegex = RegExp(r'^[A-Za-z\s]+$');
+  return nameRegex.hasMatch(name.trim());
+}
+
+void _onNameChanged(String name) {
+  setState(() {
+    _isNameValid = _validateName(name);
+  });
+}
+
+
   bool isTeacher = true; // default switch = Student
   String _selectedRole = "teacher"; // same as default
+
+  bool isValidIndianPhoneNumber(String input) {
+    final trimmed = input.trim();
+    if (input.isEmpty) return true;
+    final regex = RegExp(r'^[0-9]{10}$');
+    return regex.hasMatch(trimmed);
+  }
+
+  bool isValidPhoneNumber(PhoneNumber phone) {
+    final number = phone.number;
+    final countryCode = phone.countryCode;
+
+    // Allow only digits
+    final onlyDigits = RegExp(r'^[0-9]+$');
+    if (!onlyDigits.hasMatch(number)) return false;
+
+    // Country-specific rule
+    if (countryCode == '+91') {
+      return number.length == 10; // India: 10 digits
+    } else {
+      return number.length >= 6 && number.length <= 15;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-        backgroundColor: const Color.fromARGB(255, 195, 244, 205),
         body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(40.0),
+          padding: const EdgeInsets.all(20.0),
           child: Center(
             child: Card(
               elevation: 10,
@@ -90,127 +136,205 @@ class _SignUpPageState extends State<SignUpPage> {
                                 const SizedBox(height: 20),
                                 TextField(
                                   controller: _name,
-                      decoration: InputDecoration(
-                        labelText: 'Name',
-                        filled: true,
-                        fillColor: Colors.grey[200],
-                        prefixIcon: Icon(Icons.person),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(20),
-                          borderSide: BorderSide(color: Colors.grey),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(20),
-                          borderSide: BorderSide(color: Colors.teal, width: 2),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20,),
-                    TextField(
-                        controller: _email,
-                        keyboardType: TextInputType.emailAddress,
-                        decoration: InputDecoration(
-                          labelText: 'Email ID',
-                          filled: true,
-                          fillColor: Colors.grey[200],
-                          prefixIcon: Icon(Icons.email),
-                          suffixIcon: _email.text.isEmpty
-                              ? null
-                              : Icon(
-                                  isEmailValid ? Icons.check_circle : Icons.cancel,
-                                  color: isEmailValid ? Colors.green : Colors.red,
-                                ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(20),
-                            borderSide: BorderSide(color: Colors.grey),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(20),
-                            borderSide: BorderSide(color: Colors.teal, width: 2),
-                          ),
-                        ),
-                      ),
-                    const SizedBox(height: 20),
-                    TextField(
-                      controller: _password,
-                      obscureText: true,
-                      decoration: InputDecoration(
-                        labelText: 'Set a Password',
-                        filled: true,
-                        fillColor: Colors.grey[200],
-                        prefixIcon: Icon(Icons.password),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(20),
-                          borderSide: BorderSide(color: Colors.grey),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(20),
-                          borderSide: BorderSide(color: Colors.teal, width: 2),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-                    TextField(
-                      controller: _confirmPasswordController,
-                      obscureText: true,
-                      decoration: InputDecoration(
-                        labelText: 'Confirm Password',
-                        filled: true,
-                        fillColor: Colors.grey[200],
-                        prefixIcon: Icon(Icons.lock_outline),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(20),
-                          borderSide: BorderSide(color: Colors.grey),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                                        borderRadius: BorderRadius.circular(20),
-                                        borderSide: BorderSide(
-                                            color: Colors.teal, width: 2),
-                                      ),
+                                  onChanged: _onNameChanged,
+                                  decoration: InputDecoration(
+                                    labelText: 'Name',
+                                    fillColor: Colors.grey[200],
+                                    prefixIcon: const Icon(Icons.person),
+                                    suffixIcon: _name.text.isEmpty
+                                        ? null
+                                        : (_isNameValid
+                                            ? const Icon(Icons.check_circle,
+                                                color: Colors.green)
+                                            : const Icon(Icons.cancel,
+                                                color: Colors.red)),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                      borderSide:
+                                          const BorderSide(color: Colors.grey),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                      borderSide: const BorderSide(
+                                          color: Colors.teal, width: 2),
                                     ),
                                   ),
-                        SizedBox(height: 20,),
-                        Row(
-                          children: [
-                            Icon(
-                              isLengthValid ? Icons.check_circle : Icons.cancel,
-                              color: isLengthValid ? Colors.green : Colors.red,
-                            ),
-                            SizedBox(width: 8),
-                            Text("At least 6 characters"),
-                          ],
-                        ),
-                        SizedBox(height: 10,),
-                        Row(
-                          children: [
-                            Icon(
-                              isMatch ? Icons.check_circle : Icons.cancel,
-                              color : isMatch ? Colors.green : Colors.red,
-                            ),
-                            SizedBox(width: 8),
-                            Text("Passwords match"),
-                          ],),
-                          SizedBox(
-                            height: 10,
-                          ),
+                                ),
+                                SizedBox(height: 20),
+                                IntlPhoneField(
+                                  controller: _phone,
+                                  initialCountryCode: 'IN',
+                                  decoration: InputDecoration(
+                                    labelText: 'Phone Number',
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                    ),
+                                    suffixIcon: _phone.text.isEmpty
+                                        ? null
+                                        : (_isPhoneValid
+                                            ? const Icon(Icons.check_circle,
+                                                color: Colors.green)
+                                            : const Icon(Icons.cancel,
+                                                color: Colors.red)),
+                                  ),
+                                  onChanged: (phone) {
+                                    setState(() {
+                                      completeNumber = phone
+                                          .completeNumber; // e.g. +919876543210
+                                      _isPhoneValid = isValidPhoneNumber(phone);
+                                    });
+                                  },
+                                  onCountryChanged: (country) {
+                                    // Re-validate if user switches country
+                                    setState(() {
+                                      _isPhoneValid = isValidPhoneNumber(
+                                        PhoneNumber(
+                                          countryISOCode: country.code,
+                                          countryCode: '+${country.dialCode}',
+                                          number: _phone.text,
+                                        ),
+                                      );
+                                    });
+                                  },
+                                ),
+                                TextField(
+                                  controller: _email,
+                                  keyboardType: TextInputType.emailAddress,
+                                  decoration: InputDecoration(
+                                    labelText: 'Email ID',
+                                    fillColor: Colors.grey[200],
+                                    prefixIcon: Icon(Icons.email),
+                                    suffixIcon: _email.text.isEmpty
+                                        ? null
+                                        : Icon(
+                                            isEmailValid
+                                                ? Icons.check_circle
+                                                : Icons.cancel,
+                                            color: isEmailValid
+                                                ? Colors.green
+                                                : Colors.red,
+                                          ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                      borderSide:
+                                          BorderSide(color: Colors.grey),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                      borderSide: BorderSide(
+                                          color: Colors.teal, width: 2),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 20),
+                                TextField(
+                                  controller: _password,
+                                  obscureText: true,
+                                  decoration: InputDecoration(
+                                    labelText: 'Set a Password',
+                                    fillColor: Colors.grey[200],
+                                    prefixIcon: Icon(Icons.password),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                      borderSide:
+                                          BorderSide(color: Colors.grey),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                      borderSide: BorderSide(
+                                          color: Colors.teal, width: 2),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 20),
+                                TextField(
+                                  controller: _confirmPasswordController,
+                                  obscureText: true,
+                                  decoration: InputDecoration(
+                                    labelText: 'Confirm Password',
+                                    fillColor: Colors.grey[200],
+                                    prefixIcon: Icon(Icons.lock_outline),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                      borderSide:
+                                          BorderSide(color: Colors.grey),
+                                    ),
+                                    focusedBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(20),
+                                      borderSide: BorderSide(
+                                          color: Colors.teal, width: 2),
+                                    ),
+                                  ),
+                                ),
+                                SizedBox(
+                                  height: 20,
+                                ),
+                                Row(
+                                  children: [
+                                    Icon(
+                                      isLengthValid
+                                          ? Icons.check_circle
+                                          : Icons.cancel,
+                                      color: isLengthValid
+                                          ? Colors.green
+                                          : Colors.red,
+                                    ),
+                                    SizedBox(width: 8),
+                                    Text("At least 6 characters"),
+                                  ],
+                                ),
+                                SizedBox(
+                                  height: 10,
+                                ),
+                                Row(
+                                  children: [
+                                    Icon(
+                                      isMatch
+                                          ? Icons.check_circle
+                                          : Icons.cancel,
+                                      color:
+                                          isMatch ? Colors.green : Colors.red,
+                                    ),
+                                    SizedBox(width: 8),
+                                    Text("Passwords match"),
+                                  ],
+                                ),
+                                SizedBox(
+                                  height: 10,
+                                ),
                           SizedBox(
                                   width: double.infinity,
                                   child: FilledButton(
                                     onPressed: _isLoading
                                         ? null
                                         : () async {
+                                            final email = _email.text.trim().isEmpty ? null : _email.text.trim();
+                                            final phone = _phone.text.trim().isEmpty ? null : _phone.text.trim();
+                                           
                                             if (_name.text.isEmpty) {
                                               Fluttertoast.showToast(
                                                   msg: 'Name Required');
                                               return;
-                                            } else if (_email.text.isEmpty) {
+                                            } else if (!_isNameValid) {
                                               Fluttertoast.showToast(
-                                                  msg: 'Email Required');
+                                                  msg:
+                                                      'Name cannot contain special characters or numbers');
+                                              return;
+                                            } else if (!isValidIndianPhoneNumber(
+                                                _phone.text)) {
+                                              Fluttertoast.showToast(
+                                                  msg: 'Invalid phone number');
                                               return;
                                             } else if (!isEmailValid) {
                                               Fluttertoast.showToast(
                                                   msg: 'Invalid Email');
                                               return;
+                                            } else if (email == null &&
+                                                phone == null) {
+                                              Fluttertoast.showToast(
+                                                  msg:
+                                                      'Either Phone or E-Mail required');
+                                                      return;
                                             } else if (_password.text.isEmpty) {
                                               Fluttertoast.showToast(
                                                   msg: 'Password Required');
@@ -222,15 +346,18 @@ class _SignUpPageState extends State<SignUpPage> {
                                                       'Password Criteria not met');
                                               return;
                                             }
+                                            
 
                                             setState(() => _isLoading = true);
+                                            
 
                                             try {
                                               await AuthController.register(
                                                 _name.text,
-                                                _email.text,
+                                                email,
                                                 _password.text,
                                                 _selectedRole,
+                                                phone
                                               );
 
                                               if (!mounted) return;
@@ -242,16 +369,30 @@ class _SignUpPageState extends State<SignUpPage> {
                                                         ApprovalPending()),
                                               );
                                             } catch (error) {
-                                              Fluttertoast.showToast(
-                                                msg: error
+                                              String errorMessage =
+                                                  "Something went wrong";
+
+                                              try {
+                                                final Map<String, dynamic>
+                                                    decoded = jsonDecode(error
+                                                        .toString()
+                                                        .replaceFirst(
+                                                            "Exception: ", ""));
+                                                if (decoded
+                                                    .containsKey('message')) {
+                                                  errorMessage =
+                                                      decoded['message'];
+                                                }
+                                              } catch (e) {
+                                                // If decoding fails, fallback to default clean string
+                                                errorMessage = error
                                                     .toString()
                                                     .replaceFirst(
-                                                        "Exception: ", ""),
-                                                toastLength: Toast.LENGTH_SHORT,
-                                                gravity: ToastGravity.BOTTOM,
-                                                textColor: Colors.white,
-                                                fontSize: 16.0,
-                                              );
+                                                        "Exception: ", "");
+                                              }
+
+                                              Fluttertoast.showToast(
+                                                  msg: errorMessage);
                                             } finally {
                                               if (mounted) {
                                                 setState(
@@ -271,22 +412,23 @@ class _SignUpPageState extends State<SignUpPage> {
                                         : const Text("Register"),
                                   ),
                                 ),
-                                SizedBox(height: 20),
+                                SizedBox(height: 10),
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.center,
                                   children: [
-                                    Text("Already have an account? "),
-                                    GestureDetector(
-                                      onTap: () {
+                                    const Text("Already have an account? "),
+                                    TextButton(
+                                      onPressed: () {
                                         Navigator.pushReplacement(
                                           context,
                                           MaterialPageRoute(
-                                            builder: (context) =>
-                                                LoginPage(), 
+                                            builder: (context) => LoginPage(),
                                           ),
                                         );
                                       },
-                                      child: Text(
+                                      style: TextButton.styleFrom(
+                                          padding: EdgeInsets.zero),
+                                      child: const Text(
                                         "Log In",
                                         style: TextStyle(
                                           color: Colors.blue,
@@ -295,7 +437,7 @@ class _SignUpPageState extends State<SignUpPage> {
                                       ),
                                     ),
                                   ],
-                                ),
+                                )
                               ],
                             )))))));
   }

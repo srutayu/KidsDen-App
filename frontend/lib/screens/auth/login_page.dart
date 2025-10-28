@@ -6,6 +6,7 @@ import 'package:frontend/provider/auth_provider.dart';
 import 'package:frontend/provider/user_data_provider.dart';
 import 'package:frontend/screens/auth/approval_pending.dart';
 import 'package:frontend/screens/auth/signup_page.dart';
+import 'package:frontend/screens/auth/change_password.dart';
 import 'package:frontend/screens/users/admin_page.dart';
 import 'package:frontend/screens/users/student_page.dart';
 import 'package:frontend/screens/users/teacher_page.dart';
@@ -26,7 +27,6 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color.fromARGB(255, 195, 244, 205),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(40.0),
@@ -53,16 +53,15 @@ class _LoginPageState extends State<LoginPage> {
                     TextField(
                       controller: _email,
                       decoration: InputDecoration(
-                        labelText: 'Email ID',
-                        filled: true,
+                        labelText: 'Email ID/Phone Number',
                         fillColor: Colors.grey[200],
-                        prefixIcon: Icon(Icons.email),
+                        prefixIcon: Icon(Icons.person_2_outlined),
                         enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(20),
+                          borderRadius: BorderRadius.circular(15),
                           borderSide: BorderSide(color: Colors.grey),
                         ),
                         focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(20),
+                          borderRadius: BorderRadius.circular(15),
                           borderSide: BorderSide(color: Colors.teal, width: 2),
                         ),
                       ),
@@ -87,93 +86,141 @@ class _LoginPageState extends State<LoginPage> {
                             });
                           },
                         ),
+                        
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(15),
                         ),
                       ),
                     ),
-                    const SizedBox(height: 20),
+                    const SizedBox(height: 5),
+                    TextButton(
+                            onPressed: () {
+                              Navigator.push(context, MaterialPageRoute(builder: (_) => const ChangePasswordPage()));
+                            },
+                            style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                            child: const Text(
+                              'Forgot Password?',
+                              style: TextStyle(
+                                color: Colors.blue,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                          ),
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton(onPressed: () async {
                         try {
-                          bool isApproved =
-                              await AuthController.checkIfAproved(_email.text);
-                      
-                          if (!isApproved) {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (_) => ApprovalPending()),
-                            );
-                            return;
-                          }
-                      
-                          final loginResponse = await AuthController.login(
-                            _email.text,
-                            _password.text,
-                          );
-                      
-                          String? role = loginResponse?.user.role;
-                          String? token = loginResponse?.token;
+                              if (_email.text.trim() == '' ||
+                                  _password.text.trim() == '') {
+                                Fluttertoast.showToast(
+                                  msg: 'Empty email/password fields',
+                                  fontSize: 16.0,
+                                );
+                                return;
+                              }
+                              // 1️⃣ Attempt login first — validates user existence and password
+                              final loginResponse = await AuthController.login(
+                                _email.text.trim(),
+                                _password.text.trim(),
+                              );
 
-                          final storage= const FlutterSecureStorage();
-                      
-                          Provider.of<AuthProvider>(context, listen: false)
-                              .setToken(token!);
-                          await storage.write(key: 'token', value:  token);
-                          print('token is');
-                          print( await storage.read(key: 'token'));
-                          Provider.of<UserProvider>(context, listen: false)
-                              .fetchUserDetails(_email.text, token);
-                          await storage.write(key: 'email', value: _email.text);
-                      
-                          if (role == 'admin') {
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(builder: (_) => AdminPage()),
-                            );
-                          } else if (role == 'teacher') {
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(builder: (_) => TeacherPage()),
-                            );
-                          } else if (role == 'student') {
-                            Navigator.pushReplacement(
-                              context,
-                              MaterialPageRoute(builder: (_) => StudentPage()),
-                            );
-                          }
-                        } catch (e) {
-                          Fluttertoast.showToast(
-                            msg: e.toString().replaceFirst("Exception: ", ""),
-                            toastLength: Toast.LENGTH_SHORT,
-                            gravity: ToastGravity.BOTTOM,
-                            textColor: Colors.white,
-                            fontSize: 16.0,
-                          );
-                        }
-                      }, child: Text('Login')),
+                              if (loginResponse == null) {
+                                Fluttertoast.showToast(
+                                  msg: 'Invalid email or password',
+                                  fontSize: 16.0,
+                                );
+                                return;
+                              }
+
+                              // 2️⃣ Now safely check if user is approved
+                              bool isApproved =
+                                  await AuthController.checkIfApproved(
+                                      _email.text.trim());
+
+                              if (!isApproved) {
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(
+                                      builder: (_) => ApprovalPending()),
+                                );
+                                return;
+                              }
+
+                              // 3️⃣ Extract token, role, and other details
+                              String? role = loginResponse.user.role;
+                              String? token = loginResponse.token;
+
+                              final storage = const FlutterSecureStorage();
+
+                              // 4️⃣ Save token and email
+                              Provider.of<AuthProvider>(context, listen: false)
+                                  .setToken(token);
+                              await storage.write(key: 'token', value: token);
+                              await storage.write(
+                                  key: 'email', value: _email.text.trim());
+
+                              // 5️⃣ Fetch user details via provider
+                              Provider.of<UserProvider>(context, listen: false)
+                                  .fetchUserDetails(_email.text.trim(), token);
+
+                              // 6️⃣ Navigate based on role
+                              Widget targetPage;
+                              switch (role) {
+                                case 'admin':
+                                  targetPage = AdminPage();
+                                  break;
+                                case 'teacher':
+                                  targetPage = TeacherPage();
+                                  break;
+                                case 'student':
+                                  targetPage = StudentPage();
+                                  break;
+                                default:
+                                  Fluttertoast.showToast(
+                                    msg: 'Unknown role: $role',
+                                    toastLength: Toast.LENGTH_SHORT,
+                                    gravity: ToastGravity.BOTTOM,
+                                    textColor: Colors.white,
+                                    fontSize: 16.0,
+                                  );
+                                  return;
+                              }
+
+                              Navigator.pushReplacement(
+                                context,
+                                MaterialPageRoute(builder: (_) => targetPage),
+                              );
+                            } catch (e) {
+                              // 7️⃣ Handle all errors gracefully
+                              print('Login error: $e');
+
+                              Fluttertoast.showToast(
+                                msg: e
+                                    .toString()
+                                    .replaceFirst('Exception: ', ''),
+                                fontSize: 16.0,
+                              );
+                            }
+                          },
+                          child: Text('Login')),
                     ),
-                    SizedBox(
-                      height: 20,
-                    ),
-                    GestureDetector(
-                      onTap: () {
-                        Navigator.pushReplacement(
-                          context,
-                          MaterialPageRoute(builder: (context) {
-                            return SignUpPage();
-                          },)
-                        );
-                      },
-                      child: Text(
-                        'Not registered? Sign up.',
-                        style: TextStyle(
-                          color: Colors.blue,
-                          decoration: TextDecoration.underline,
-                        ),
-                      ),
-                    )
+                    // const SizedBox(height: 5),
+                     TextButton(
+                              onPressed: () {
+                                Navigator.pushReplacement(
+                                  context,
+                                  MaterialPageRoute(builder: (context) => SignUpPage()),
+                                );
+                              },
+                              style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                              child: const Text(
+                                'Not registered? Sign up.',
+                                style: TextStyle(
+                                  color: Colors.blue,
+                                  decoration: TextDecoration.underline,
+                                ),
+                              ),
+                            ),
                   ],
                 ),
               ),

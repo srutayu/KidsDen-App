@@ -8,8 +8,13 @@ const userSchema = new mongoose.Schema({
     },
     email: {
         type: String,
-        required: true,
-        unique: true
+        required: false
+    },
+    phone: {
+        type: String,
+        required: false,
+        trim: true,
+        default: undefined
     },
     password: {
         type: String,
@@ -28,6 +33,22 @@ const userSchema = new mongoose.Schema({
 }, { timestamps: true });
 
 userSchema.pre('save', async function(next) {
+    try {
+        if (this.phone) {
+            // Remove all non-digit characters
+            const digits = this.phone.replace(/\D/g, '');
+            if (/^\d{10}$/.test(digits)) {
+                this.phone = `91${digits}`;
+            } else {
+                this.phone = digits || null;
+            }
+        }
+    } catch (e) {
+        // On any error leave phone as-is
+        // eslint-disable-next-line no-console
+        console.error('[UserModel] phone normalization error:', e);
+    }
+
     if (!this.isModified('password')) {
         return next();
     }
@@ -35,6 +56,10 @@ userSchema.pre('save', async function(next) {
     this.password = await bcrypt.hash(this.password, salt);
     next();
 });
+
+
+userSchema.index({ email: 1 }, { unique: true, partialFilterExpression: { email: { $exists: true, $ne: null } } });
+userSchema.index({ phone: 1 }, { unique: true, partialFilterExpression: { phone: { $exists: true, $ne: null } } });
 
 userSchema.methods.comparePassword = async function (enteredPassword) {
     return await bcrypt.compare(enteredPassword, this.password);

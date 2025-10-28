@@ -120,6 +120,23 @@ exports.checkAttendance = async (req, res) => {
     }
 };
 
+// Check whether attendance for teachers on a given date has already been taken
+exports.checkTeacherAttendance = async (req, res) => {
+    try {
+        const { date } = req.query;
+        if (!date) {
+            return res.status(400).json({ message: 'date is required' });
+        }
+
+        const count = await studentAttendanceSchema.countDocuments({ date: normalizeDateToDay(date) });
+
+        return res.status(200).json({ attendance_taken: count > 0 });
+    } catch (error) {
+        console.error('Error checking attendance:', error);
+        return res.status(500).json({ message: 'Server error', error: error.message });
+    }
+};
+
 
 exports.takeTeacherAttendance = async (req, res) => {
     try {

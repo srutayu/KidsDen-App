@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:frontend/constants/url.dart';
 import 'package:frontend/provider/user_data_provider.dart';
-import 'package:frontend/screens/chat/broadcast_screen.dart';
 import 'package:frontend/screens/widgets/greetingWidget.dart';
 import 'package:provider/provider.dart';
 import 'chat_screen.dart';
@@ -37,8 +36,7 @@ class _ClassListScreenState extends State<ClassListScreen> {
       final url = Uri.parse('${URL.chatURL}/classes/get-classes');
       final res = await http.get(url,
         headers: {'Authorization': 'Bearer ${widget.authToken}'});
-
-      print("StatusCode: ${res.statusCode}");
+        
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
         setState(() {
@@ -95,27 +93,6 @@ class _ClassListScreenState extends State<ClassListScreen> {
                             style: TextStyle(
                               fontSize: 20,
                               fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          FilledButton(
-                            onPressed: () {
-                              Navigator.push(context, MaterialPageRoute(
-                                builder: (context) {
-                                  return BroadcastScreen(
-                                    authToken: widget.authToken,
-                                    userId: userId,
-                                    userRole: role,
-                                  );
-                                },
-                              ));
-                            },
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.campaign),
-                                SizedBox(width: 8),
-                                Text("Broadcast"),
-                              ],
                             ),
                           ),
                         ] else ...[
@@ -177,6 +154,7 @@ class _ClassListScreenState extends State<ClassListScreen> {
                         Text(
                           className,
                           style: TextStyle(
+                            color: (Colors.black),
                             fontSize: 16, 
                             fontWeight: FontWeight.bold,
                           ),

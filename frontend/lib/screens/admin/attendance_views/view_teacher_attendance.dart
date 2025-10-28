@@ -176,43 +176,54 @@ Widget _buildAdminAttendanceList() {
             const SizedBox(height: 16),
 
             GestureDetector(
-              onTap: () async {
-                _pickDate();
-              },
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: const Color.fromARGB(255, 222, 219, 219),
-                      spreadRadius: 1,
-                      blurRadius: 2,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Icon(Icons.calendar_today, color: Colors.grey),
-                    Text(
-                      '${selectedDate.day.toString().padLeft(2, '0')} '
-                      '${_monthName(selectedDate.month)} '
-                      '${selectedDate.year}',
-                      style: const TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    const Icon(Icons.arrow_drop_down,
-                        color: Color.fromARGB(255, 84, 83, 83)),
-                  ],
-                ),
-              ),
-            ),
+  onTap: () async {
+    _pickDate();
+  },
+  child: Container(
+    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+    decoration: BoxDecoration(
+      color: Theme.of(context).brightness == Brightness.dark
+          ? const Color(0xFF2A2A2A) // dark mode background
+          : Colors.white, // light mode background
+      borderRadius: BorderRadius.circular(12),
+      border: Border.all(
+        color: Theme.of(context).brightness == Brightness.dark
+            ? Colors.grey.shade700
+            : Colors.grey.shade300,
+      ),
+    ),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Icon(
+          Icons.calendar_today,
+          color: Theme.of(context).brightness == Brightness.dark
+              ? Colors.grey.shade400
+              : Colors.grey.shade600,
+        ),
+        Text(
+          '${selectedDate.day.toString().padLeft(2, '0')} '
+          '${_monthName(selectedDate.month)} '
+          '${selectedDate.year}',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.w500,
+            color: Theme.of(context).brightness == Brightness.dark
+                ? Colors.white
+                : Colors.black87,
+          ),
+        ),
+        Icon(
+          Icons.arrow_drop_down_rounded,
+          color: Theme.of(context).brightness == Brightness.dark
+              ? Colors.white70
+              : Colors.grey.shade800,
+        ),
+      ],
+    ),
+  ),
+),
+
 
             const SizedBox(height: 16),
 
