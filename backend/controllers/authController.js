@@ -49,7 +49,7 @@ exports.registerUser = async (req, res) => {
         }
 
         // Check duplicates only when email/phone are provided
-        if (email) {
+        if (email && email!=null) {
             const existingByEmail = await User.findOne({ email });
             if (existingByEmail) {
                 return res.status(400).json({ message: 'E-mail ID already used' });
