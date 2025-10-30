@@ -37,14 +37,16 @@ app.use(errorHandler);
 startConsumer();
 app.set('io', io); // Make io accessible in routes
 app.use('/api/classes', require('./routes/classRoutes'));
+
 app.get('/health', (req, res) => {
       res.status(200).json({
         status: 'healthy',
-        service: 'backend',
+        service: 'chatbackend',
         timestamp: new Date().toISOString(),
-        port: port
+        port: PORT
       });
     });
+
 // Map to track socket IDs and their user roles
 const socketRoles = new Map();
 sub.subscribe('chatMessages');
