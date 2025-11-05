@@ -216,7 +216,7 @@ void _showMessageMenu(BuildContext context, Map<dynamic, dynamic> msg, bool isMe
         }
       }
 
-      if (parsed is Map && parsed['type'] == 'file') {
+      if (parsed is Map && parsed['type'] == 'file' && parsed['url']!= null) {
         final mime = parsed['mime'] ?? '';
         if (mime.startsWith('image/') ||
             mime.startsWith('video/') ||
