@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:fluttertoast/fluttertoast.dart';
 import 'package:frontend/controllers/payment_controller.dart';
 import 'package:frontend/controllers/razorpay_controller.dart';
 import 'package:frontend/models/payment_model.dart';
@@ -23,6 +24,8 @@ class _PaymentPageState extends State<PaymentPage> {
 
   List<dynamic> fees = [];
   bool isLoading = true;
+  Set<int> _processingIndexes = {};
+
 
   @override
   void initState() {
@@ -47,9 +50,13 @@ class _PaymentPageState extends State<PaymentPage> {
   Future<void> fetchFeesData() async {
     final fetchedFee = await FeesService.fetchAmountByClass(
         userData!.assignedClasses[0], token);
-    setState(() {
-      feeAmount = fetchedFee; // store it in state
-    });
+
+    if (mounted) {
+      setState(() {
+        feeAmount = fetchedFee; // store it in state
+      });
+    }
+
     try {
       final response = await GetFeesController.fetchPaymentDetails(token!);
       setState(() {
@@ -101,24 +108,53 @@ class _PaymentPageState extends State<PaymentPage> {
   if (verified) {
     await _refreshData();
 
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text("Payment Successful and Verified!")),
-    );
+    Fluttertoast.showToast(msg: "Payment Successful and Verified!");
   } else {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text("Payment verification failed. Please contact support."),
-      ),
-    );
+    Fluttertoast.showToast(msg: "Payment verification failed. Please contact school admin.");
   }
 }
 
 
-  void _handlePaymentError(PaymentFailureResponse response) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text("Payment Failed: ${response.message}")),
-    );
+ void _handlePaymentError(PaymentFailureResponse response) {
+  String message;
+
+  switch (response.code) {
+    case 0: // NETWORK_ERROR
+      message = "Network error — please check your internet connection.";
+      break;
+
+    case 1: // INVALID_OPTIONS
+      message = "Invalid payment setup — please try again later.";
+      break;
+
+    case 2: // PAYMENT_CANCELLED
+      message = "Cancelled by user.";
+      break;
+
+    case 3: // TLS_ERROR
+      message = "Secure connection error — please update your app or try again.";
+      break;
+
+    case 4: // INCOMPATIBLE_PLUGIN
+      message = "Payment service not supported on this device.";
+      break;
+
+    case 100: // UNKNOWN_ERROR
+    default:
+      message = "Something went wrong. Please try again.";
+      break;
   }
+
+  // Optional: append additional info if available
+  final details = response.message?.isNotEmpty == true ? "" : "";
+
+  Fluttertoast.showToast(
+    msg: "Payment Failed: $message$details",
+  );
+
+  print("Payment failed [${response.code}]: ${response.message}");
+}
+
 
   void _handleExternalWallet(ExternalWalletResponse response) {
     ScaffoldMessenger.of(context).showSnackBar(
@@ -141,7 +177,7 @@ class _PaymentPageState extends State<PaymentPage> {
     }
   }
 
-  void openCheckout(
+  Future<void> openCheckout(
       {required String month, required int year, required int amount}) async {
     try {
       var orderData =
@@ -204,18 +240,37 @@ class _PaymentPageState extends State<PaymentPage> {
                           color: status == "paid" ? Colors.green : Colors.red,
                         ),
                       ),
-                      trailing: ElevatedButton(
-                        onPressed: status == "paid"
-                            ? null
-                            : () {
-                                openCheckout(
-                                  month: fee["month"],
-                                  year: now.year,
-                                  amount: feeAmount,
-                                );
-                              },
-                        child: const Text("Pay Now"),
-                      ),
+                    trailing: ElevatedButton(
+  onPressed: (status == "paid" || _processingIndexes.contains(index))
+      ? null
+      : () async {
+          setState(() {
+            _processingIndexes.add(index);
+          });
+
+          try {
+            await openCheckout(
+              month: fee["month"],
+              year: now.year,
+              amount: feeAmount,
+            );
+          } catch (e) {
+            print("Checkout error: $e");
+          } finally {
+            setState(() {
+              _processingIndexes.remove(index);
+            });
+          }
+        },
+  child: _processingIndexes.contains(index)
+      ? const SizedBox(
+          height: 16,
+          width: 16,
+          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+        )
+      : const Text("Pay Now"),
+),
+
                     ),
                   );
                 },
