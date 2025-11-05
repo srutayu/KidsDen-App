@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:frontend/constants/url.dart';
 import 'package:frontend/provider/user_data_provider.dart';
 import 'package:frontend/screens/chat/download_media.dart';
@@ -7,6 +8,7 @@ import 'package:frontend/screens/chat/image_viewer.dart';
 import 'package:frontend/screens/chat/media_gallery.dart';
 import 'package:frontend/screens/chat/pdf_viewer.dart';
 import 'package:frontend/screens/chat/videoPlayer.dart';
+import 'package:frontend/screens/widgets/toast_message.dart';
 import 'package:frontend/services/s3_services.dart';
 import 'package:intl/intl.dart';
 import 'package:open_filex/open_filex.dart';
@@ -138,6 +140,66 @@ void _precachePreviousImages(int currentIndex) async {
     }
   }
 }
+Offset _tapPosition = Offset.zero;
+
+void _storePosition(TapDownDetails details) {
+  _tapPosition = details.globalPosition;
+}
+
+void _showMessageMenu(BuildContext context, Map<dynamic, dynamic> msg, bool isMe) async {
+  final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
+
+  final selected = await showMenu<String>(
+    context: context,
+    position: RelativeRect.fromLTRB(
+      _tapPosition.dx,
+      _tapPosition.dy,
+      overlay.size.width - _tapPosition.dx,
+      overlay.size.height - _tapPosition.dy,
+    ),
+    items: [
+      // Always allow copy
+      PopupMenuItem(
+        value: 'copy',
+        child: Row(
+          children: const [
+            Icon(Icons.copy, size: 20),
+            SizedBox(width: 8),
+            Text('Copy'),
+          ],
+        ),
+      ),
+
+      // Only allow delete for user's own messages
+      if (isMe)
+        PopupMenuItem(
+          value: 'delete',
+          child: Row(
+            children: const [
+              Icon(Icons.delete, size: 20, color: Colors.red),
+              SizedBox(width: 8),
+              Text('Delete'),
+            ],
+          ),
+        ),
+    ],
+  );
+
+  // Handle user selection
+  switch (selected) {
+    case 'copy':
+      if (msg['content'] != null && msg['content'].toString().isNotEmpty) {
+        await Clipboard.setData(ClipboardData(text: msg['content']));
+        showToast('Text Copied');
+      }
+      break;
+
+    case 'delete':
+      _attemptDeleteMessage(msg['_id'] as String? ?? '', msg);
+      break;
+  }
+}
+
 
 
 
@@ -1026,18 +1088,20 @@ Widget _buildFilePreview(Map parsed, String messageId, String sender) {
         ),
       ),
     );
-
-    // Only allow long-press delete for messages sent by the current user
+    
     if (isMe) {
-      return GestureDetector(
-        onLongPress: () =>
-            _attemptDeleteMessage(msg['_id'] as String? ?? '', msg),
-        child: bubble,
-      );
-    }
-
-    // For messages not sent by the current user, just return the bubble (no delete option)
-    return bubble;
+  return GestureDetector(
+    onTapDown: (details) => _storePosition(details),
+    onLongPress: () => _showMessageMenu(context, msg, isMe),
+    child: bubble,
+  );
+} else {
+  return GestureDetector(
+    onTapDown: (details) => _storePosition(details),
+    onLongPress: () => _showMessageMenu(context, msg, isMe),
+    child: bubble,
+  );
+}
   }
 
   /// Attempt to delete a message. If the message is optimistic (local_ id) it
@@ -1163,44 +1227,72 @@ Widget _buildFilePreview(Map parsed, String messageId, String sender) {
                     child: Container(
                       decoration: BoxDecoration(
                         color: Colors.black54,
-                          border: Border.all(
-                            color: Colors.grey, // border color
-                            width: 1.5, // border thickness
-                          ),
-                          borderRadius: BorderRadius.circular(29)),
+                        border: Border.all(
+                          color: Colors.grey, // border color
+                          width: 1.5, // border thickness
+                        ),
+                        borderRadius: BorderRadius.circular(29),
+                      ),
                       child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
+                          // ✅ Text input area with internal scroll
                           Expanded(
-                            child: TextField(
-                              controller: _controller,
-                              maxLines: null,
-                              keyboardType: TextInputType.multiline,
-                              onChanged: (val) => sendTyping(val.isNotEmpty),
-                              style: TextStyle(color: Colors.black),
-                              decoration: InputDecoration(
-                                hintText: 'Type a message',
-                                hintStyle: const TextStyle(
-                                  color: Colors.black54
+                            child: Container(
+                              constraints: const BoxConstraints(
+                                maxHeight:
+                                    150, // limit height before scroll activates
+                              ),
+                              margin: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 6),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(29),
+                              ),
+                              child: Scrollbar(
+                                thumbVisibility:
+                                    false, // set true if you want a visible scrollbar
+                                child: SingleChildScrollView(
+                                  reverse:
+                                      true, // keeps cursor at bottom when typing long text
+                                  child: TextField(
+                                    controller: _controller,
+                                    keyboardType: TextInputType.multiline,
+                                    maxLines: null,
+                                    onChanged: (val) =>
+                                        sendTyping(val.isNotEmpty),
+                                    style: const TextStyle(color: Colors.black),
+                                    decoration: const InputDecoration(
+                                      hintText: 'Type a message',
+                                      hintStyle:
+                                          TextStyle(color: Colors.black54),
+                                      border: InputBorder
+                                          .none, // remove default border
+                                      contentPadding: EdgeInsets.symmetric(
+                                          horizontal: 16, vertical: 12),
+                                    ),
+                                  ),
                                 ),
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(29),
-                                ),
-                                filled: true,
-                                fillColor: Colors.white
                               ),
                             ),
                           ),
+
+                          // ✅ Action icons (attach + send)
                           Row(
+                            mainAxisSize: MainAxisSize.min,
                             children: [
                               IconButton(
-                                icon: Icon(Icons.attach_file),
+                                icon: const Icon(Icons.attach_file),
                                 color: Colors.white,
                                 onPressed: uploadFile,
                               ),
                               IconButton(
-                                icon: Icon(Icons.send),
+                                icon: const Icon(Icons.send),
                                 color: Colors.white,
-                                onPressed: () => sendMessage(_controller.text.trim()),
+                                onPressed: () {
+                                  final text = _controller.text.trim();
+                                  if (text.isNotEmpty) sendMessage(text);
+                                },
                               ),
                             ],
                           ),
@@ -1213,7 +1305,7 @@ Widget _buildFilePreview(Map parsed, String messageId, String sender) {
                     padding: const EdgeInsets.all(16),
                     child: Text(
                       'You do not have permission to send messages.',
-                      style: TextStyle(color: Colors.grey),
+                      style: TextStyle(color: Colors.black),
                     ),
                   ),
               ],
@@ -1223,3 +1315,4 @@ Widget _buildFilePreview(Map parsed, String messageId, String sender) {
         ),
       );
 }
+
