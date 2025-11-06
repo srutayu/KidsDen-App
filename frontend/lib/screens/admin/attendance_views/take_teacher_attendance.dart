@@ -200,7 +200,7 @@ Future<void> _checkAttendanceStatus() async {
                   ),
                 );
               }),
-            ElevatedButton(onPressed: _submitAttendance, child: Text('Submit'))
+            Center(child: OutlinedButton(onPressed: _submitAttendance, child: Text('Submit')))
           ],
         ),
       ),

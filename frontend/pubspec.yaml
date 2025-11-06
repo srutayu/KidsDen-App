@@ -69,6 +69,7 @@ dependencies:
   file_picker: ^10.3.3
   intl_phone_field: ^3.2.0
   open_filex: ^4.7.0
+  connectivity_plus: ^7.0.0
 
 
 

@@ -17,6 +17,7 @@ class SignUpPage extends StatefulWidget {
 
 class _SignUpPageState extends State<SignUpPage> {
   bool _isLoading = false;
+  bool _obscureText = true;
   final TextEditingController _email = TextEditingController();
   final TextEditingController _phone = TextEditingController();
   String completeNumber= '';
@@ -229,11 +230,23 @@ void _onNameChanged(String name) {
                                 const SizedBox(height: 20),
                                 TextField(
                                   controller: _password,
-                                  obscureText: true,
+                                  obscureText: _obscureText,
                                   decoration: InputDecoration(
                                     labelText: 'Set a Password',
                                     fillColor: Colors.grey[200],
                                     prefixIcon: Icon(Icons.password),
+                                    suffixIcon: IconButton(
+                                      icon: Icon(
+                                        _obscureText
+                                            ? Icons.visibility
+                                            : Icons.visibility_off,
+                                      ),
+                                      onPressed: () {
+                                        setState(() {
+                                          _obscureText = !_obscureText;
+                                        });
+                                      },
+                                    ),
                                     enabledBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(20),
                                       borderSide:
@@ -249,11 +262,23 @@ void _onNameChanged(String name) {
                                 const SizedBox(height: 20),
                                 TextField(
                                   controller: _confirmPasswordController,
-                                  obscureText: true,
+                                  obscureText: _obscureText,
                                   decoration: InputDecoration(
                                     labelText: 'Confirm Password',
                                     fillColor: Colors.grey[200],
                                     prefixIcon: Icon(Icons.lock_outline),
+                                    suffixIcon: IconButton(
+                                      icon: Icon(
+                                        _obscureText
+                                            ? Icons.visibility
+                                            : Icons.visibility_off,
+                                      ),
+                                      onPressed: () {
+                                        setState(() {
+                                          _obscureText = !_obscureText;
+                                        });
+                                      },
+                                    ),
                                     enabledBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(20),
                                       borderSide:

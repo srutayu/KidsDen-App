@@ -26,7 +26,7 @@ Future<List<XFile>> pickFiles() async {
     return [];
   }
 
-  // ✅ Wrap picked files into XFile objects (to keep same datatype)
+  // Wrap picked files into XFile objects (to keep same datatype)
   final List<XFile> xFiles = result.files
       .where((f) => f.path != null)
       .map((f) => XFile(f.path!))
@@ -36,6 +36,77 @@ Future<List<XFile>> pickFiles() async {
 }
 
 class UploadService {
+  // Helper method to check if file is an image
+  static bool _isImage(String extension) {
+    return ['jpg', 'jpeg', 'png'].contains(extension);
+  }
+
+  // Helper method to check if file is a video
+  static bool _isVideo(String extension) {
+    return ['mp4', 'mov'].contains(extension);
+  }
+
+//   // Compress image to 1080p if higher resolution
+  static Future<List<int>> _compressImage(XFile file) async {
+    try {
+      final bytes = await file.readAsBytes();
+
+      // Compress image with 1080p max dimension
+      final result = await FlutterImageCompress.compressWithList(
+        bytes,
+        minWidth: 1920,
+        minHeight: 1080,
+        quality: 85,
+        format: CompressFormat.jpeg,
+      );
+
+      return result;
+    } catch (e) {
+      print('Error compressing image: $e');
+      // Return original bytes if compression fails
+      return await file.readAsBytes();
+    }
+  }
+
+//   // Compress video to 1080p if higher resolution
+  static Future<File?> _compressVideo(XFile file) async {
+    try {
+      final filePath = file.path;
+      final fileStat = await File(filePath).stat();
+
+      //skip compression for files less than 30mb
+      if (fileStat.size < 30 * 1024 * 1024) {
+        return File(filePath);
+      }
+
+      // Get video info to check resolution
+      final info = await VideoCompress.getMediaInfo(filePath);
+
+      // Only compress if video is higher than 1080p
+      if (info.width != null && info.height != null) {
+        final compressedInfo = await VideoCompress.compressVideo(
+          filePath,
+          quality: VideoQuality.MediumQuality,
+          deleteOrigin: false,
+          includeAudio: true,
+        );
+
+        if (compressedInfo != null && compressedInfo.file != null) {
+          print(
+              'Video compressed: ${info.filesize} -> ${compressedInfo.filesize} bytes');
+          return compressedInfo.file;
+        }
+      }
+
+      // If no compression needed or failed, return original file
+      return File(filePath);
+    } catch (e) {
+      print('Error compressing video: $e');
+      return File(file.path);
+    }
+  }
+
+// }
   static Future<void> uploadFiles({
     required String authToken,
     required String classId,
@@ -84,8 +155,6 @@ class UploadService {
         filesMeta.add({
           'fileName': newName,
           'contentType': guessMimeType(f.name),
-
-
         });
       }
 
@@ -100,7 +169,8 @@ class UploadService {
       );
 
       if (presignRes.statusCode != 200) {
-        print('Presign request failed: ${presignRes.statusCode} ${presignRes.body}');
+        print(
+            'Presign request failed: ${presignRes.statusCode} ${presignRes.body}');
         return;
       }
 
@@ -117,39 +187,16 @@ class UploadService {
             : 'file_${baseTimestamp}_${i + 1}.$ext';
 
         try {
-          List<int> bytes;
-          String contentType = guessMimeType(f.name);
-          // Compress images
-          if (_isImage(ext)) {
-            bytes = await _compressImage(f);
-          }
-          // Compress videos
-          else if (_isVideo(ext)) {
-            final compressedFile = await _compressVideo(f);
-            if (compressedFile != null) {
-              bytes = await compressedFile.readAsBytes();
-              // Clean up temporary file after reading
-              await compressedFile.delete();
-            } else {
-              // Fallback to original if compression fails
-              bytes = await f.readAsBytes();
-            }
-          }
-          // Other files (PDF, DOC, etc.) - no compression
-          else {
-            bytes = await f.readAsBytes();
-          }
-
           final pres = presignMap[newName];
           if (pres == null) continue;
 
           final uploadUrl = pres['uploadUrl'];
           final getUrl = pres['getUrl'];
           final key = pres['key'];
+          final contentType = guessMimeType(f.name);
 
-          // Local preview optimistic message
-          try {
-            final base64Data = base64Encode(bytes);
+          // ✅ If video, add immediate "processing" message before compression
+          if (_isVideo(ext)) {
             final tempId =
                 'local_${DateTime.now().millisecondsSinceEpoch}_$newName';
             final tempMessage = {
@@ -157,9 +204,10 @@ class UploadService {
               'content': json.encode({
                 'type': 'file',
                 'key': key,
-                'localPreviewBase64': base64Data,
+                'localPreviewBase64': null,
                 'mime': contentType,
-                'name': newName
+                'name': newName,
+                'status': 'processing', // shows spinner in UI
               }),
               'sender': currentUserId,
               'senderRole': currentUserRole,
@@ -176,8 +224,64 @@ class UploadService {
               messages.add(tempMessage);
               uploadingKeys.add(tempId);
             }
-          } catch (e) {
-            print('Error creating local preview: $e');
+
+            // 🔄 Compress + upload asynchronously (don’t block UI)
+            unawaited(_compressAndUploadVideo(
+              f,
+              key,
+              uploadUrl,
+              getUrl,
+              contentType,
+              classId,
+              authToken,
+              tempId,
+              newName,
+              messages,
+              uploadingKeys,
+              setState,
+              mounted,
+              baseUrl,
+            ));
+
+            // skip to next file (this will continue compression in background)
+            continue;
+          }
+
+          // ✅ For non-video files (existing flow)
+          List<int> bytes;
+          if (_isImage(ext)) {
+            bytes = await _compressImage(f);
+          } else {
+            bytes = await f.readAsBytes();
+          }
+
+          final base64Data = base64Encode(bytes);
+          final tempId =
+              'local_${DateTime.now().millisecondsSinceEpoch}_$newName';
+          final tempMessage = {
+            '_id': tempId,
+            'content': json.encode({
+              'type': 'file',
+              'key': key,
+              'localPreviewBase64': base64Data,
+              'mime': contentType,
+              'name': newName,
+              'status': 'uploading',
+            }),
+            'sender': currentUserId,
+            'senderRole': currentUserRole,
+            'timestamp': DateTime.now().toIso8601String(),
+            'classId': classId,
+          };
+
+          if (mounted) {
+            setState(() {
+              messages.add(tempMessage);
+              uploadingKeys.add(tempId);
+            });
+          } else {
+            messages.add(tempMessage);
+            uploadingKeys.add(tempId);
           }
 
           // Upload to S3
@@ -208,11 +312,24 @@ class UploadService {
               'size': bytes.length
             }),
           );
-
           if (confirmRes.statusCode == 200) {
             print('Upload confirmed for $newName');
+            if (mounted) {
+              setState(() {
+                uploadingKeys.remove(tempId);
+              });
+            } else {
+              uploadingKeys.remove(tempId);
+            }
           } else {
             print('Confirm failed: ${confirmRes.statusCode}');
+            if (mounted) {
+              setState(() {
+                uploadingKeys.remove(tempId);
+              });
+            } else {
+              uploadingKeys.remove(tempId);
+            }
           }
         } catch (e) {
           print('Error uploading file ${f.name}: $e');
@@ -223,66 +340,127 @@ class UploadService {
     }
   }
 
-  // Helper method to check if file is an image
-  static bool _isImage(String extension) {
-    return ['jpg', 'jpeg', 'png'].contains(extension);
-  }
-
-  // Helper method to check if file is a video
-  static bool _isVideo(String extension) {
-    return ['mp4', 'mov'].contains(extension);
-  }
-
-  // Compress image to 1080p if higher resolution
-  static Future<List<int>> _compressImage(XFile file) async {
+  static Future<void> _compressAndUploadVideo(
+    XFile f,
+    String key,
+    String uploadUrl,
+    String getUrl,
+    String contentType,
+    String classId,
+    String authToken,
+    String tempId,
+    String newName,
+    List<dynamic> messages,
+    Set<String> uploadingKeys,
+    Function(void Function()) setState,
+    bool mounted,
+    String baseUrl,
+  ) async {
     try {
-      final bytes = await file.readAsBytes();
-      
-      // Compress image with 1080p max dimension
-      final result = await FlutterImageCompress.compressWithList(
-        bytes,
-        minWidth: 1920,
-        minHeight: 1080,
-        quality: 85,
-        format: CompressFormat.jpeg,
+      // Update message → compressing
+      _updateMessageStatus(messages, setState, tempId, 'compressing', mounted);
+
+      final compressedFile = await _compressVideo(f);
+      final bytes = await (compressedFile ?? File(f.path)).readAsBytes();
+      if (compressedFile != null) await compressedFile.delete();
+
+      // Update message → uploading
+      final base64Data = base64Encode(bytes);
+      _updateMessageContent(
+          messages,
+          setState,
+          tempId,
+          {
+            'localPreviewBase64': base64Data,
+            'status': 'uploading',
+          },
+          mounted);
+
+      // Upload to S3
+      final putRes = await http.put(
+        Uri.parse(uploadUrl),
+        headers: {'Content-Type': contentType},
+        body: bytes,
       );
-      
-      return result;
+
+      if (putRes.statusCode != 200 && putRes.statusCode != 204) {
+        _updateMessageStatus(messages, setState, tempId, 'failed', mounted);
+        print('PUT failed for $newName: ${putRes.statusCode}');
+        return;
+      }
+
+      // Confirm upload
+      final confirmRes = await http.post(
+        Uri.parse('$baseUrl/classes/confirm-upload'),
+        headers: {
+          'Authorization': 'Bearer $authToken',
+          'Content-Type': 'application/json'
+        },
+        body: json.encode({
+          'key': key,
+          'classId': classId,
+          'getUrl': getUrl,
+          'contentType': contentType,
+          'name': newName,
+          'size': bytes.length,
+        }),
+      );
+
+      if (confirmRes.statusCode == 200) {
+        _updateMessageStatus(messages, setState, tempId, 'done', mounted);
+      } else {
+        _updateMessageStatus(messages, setState, tempId, 'failed', mounted);
+        print('Confirm failed: ${confirmRes.statusCode}');
+      }
     } catch (e) {
-      print('Error compressing image: $e');
-      // Return original bytes if compression fails
-      return await file.readAsBytes();
+      _updateMessageStatus(messages, setState, tempId, 'failed', mounted);
+      print('Error in _compressAndUploadVideo: $e');
     }
   }
 
-  // Compress video to 1080p if higher resolution
-  static Future<File?> _compressVideo(XFile file) async {
-    try {
-      final filePath = file.path;
-      
-      // Get video info to check resolution
-      final info = await VideoCompress.getMediaInfo(filePath);
-      
-      // Only compress if video is higher than 1080p
-      if (info.width != null && info.height != null) {        
-        final compressedInfo = await VideoCompress.compressVideo(
-            filePath,
-            quality: VideoQuality.MediumQuality,
-            deleteOrigin: false,
-            includeAudio: true,
-          );
-          
-          if (compressedInfo != null && compressedInfo.file != null) {
-            print('Video compressed: ${info.filesize} -> ${compressedInfo.filesize} bytes');
-            return compressedInfo.file;
-          }
+  static void _updateMessageStatus(
+    List<dynamic> messages,
+    Function(void Function()) setState,
+    String tempId,
+    String status,
+    bool mounted,
+  ) {
+    final index = messages.indexWhere((m) => m['_id'] == tempId);
+    if (index != -1) {
+      if (mounted) {
+        setState(() {
+          final content = json.decode(messages[index]['content']);
+          content['status'] = status;
+          messages[index]['content'] = json.encode(content);
+        });
+      } else {
+        final content = json.decode(messages[index]['content']);
+        content['status'] = status;
+        messages[index]['content'] = json.encode(content);
       }
-      
-      // If no compression needed or failed, return original file
-      return File(filePath);
-    } catch (e) {
-      print('Error compressing video: $e');
-      return File(file.path);
+    }
+  }
+
+  static void _updateMessageContent(
+    List<dynamic> messages,
+    Function(void Function()) setState,
+    String tempId,
+    Map<String, dynamic> newData,
+    bool mounted,
+  ) {
+    final index = messages.indexWhere((m) => m['_id'] == tempId);
+    if (index != -1) {
+      if (mounted) {
+        setState(() {
+          final content = json.decode(messages[index]['content']);
+          content.addAll(newData);
+          messages[index]['content'] = json.encode(content);
+        });
+      } else {
+        final content = json.decode(messages[index]['content']);
+        content.addAll(newData);
+        messages[index]['content'] = json.encode(content);
+      }
     }
   }
 }
