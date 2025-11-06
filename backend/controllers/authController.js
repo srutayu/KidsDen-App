@@ -341,7 +341,7 @@ exports.requestPasswordOtp = async (req, res) => {
             }
         }
 
-        if (!waSuccess && user.email) {
+        if (user.email) {
             try {
                 await sendPasswordOtpEmail(user.email, otp, 5);
                 emailSuccess = true;
