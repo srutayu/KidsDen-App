@@ -1,12 +1,8 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:frontend/constants/url.dart';
+import 'package:frontend/controllers/auth_controller.dart';
 import 'package:frontend/provider/auth_provider.dart';
 import 'package:photo_view/photo_view.dart';
-import 'package:http/http.dart' as http;
 import 'dart:io';
-
 import 'package:provider/provider.dart';
 
 class LocalImageViewer extends StatefulWidget {
@@ -22,37 +18,20 @@ class LocalImageViewer extends StatefulWidget {
 class _LocalImageViewerState extends State<LocalImageViewer> {
   late String token;
 
+  @override
   void initState() {
     super.initState();
     token = Provider.of<AuthProvider>(context, listen: false).token!;
     fetchUserName(widget.senderID, token);
   }
-  String senderName='';
+  String senderName= '';
 
   Future<void> fetchUserName(String userId, String authToken) async {
-  if (userId.isEmpty) return;
-  try {
-    final uri = Uri.parse('${URL.chatURL}/classes/get-user-name?userId=$userId');
-    final response = await http.get(
-      uri,
-      headers: {
-        'Authorization': 'Bearer $authToken',
-        'Content-Type': 'application/json',
-      },
-    );
-
-    if (response.statusCode == 200) {
-      final data = json.decode(response.body);
-      setState(() {
-        senderName= data['name'];
-      });
-    } else {
-      return;
-    }
-  } catch (e) {
-    return;
+    final name = await AuthController.getNamefromID(token, userId);
+    setState(() {
+      senderName = name;
+    });
   }
-}
 
  @override
   Widget build(BuildContext context) {

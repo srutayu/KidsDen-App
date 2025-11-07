@@ -235,16 +235,7 @@ class _UpdateFeesContentState extends State<UpdateFeesContent> {
                         _amountController.text.isNotEmpty) {
                       updateFees();
                     } else {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: const Text(
-                            "Please select a class and enter amount",
-                            style: TextStyle(color: Colors.white),
-                          ),
-                          backgroundColor:
-                              isDark ? Colors.redAccent.shade200 : Colors.red,
-                        ),
-                      );
+                      showToast("Please select a class and enter amount");
                     }
                   },
                   icon: Icon(Icons.save_rounded, color: isDark? Colors.black : Colors.white,),
@@ -807,7 +798,7 @@ Widget buildStudentList(String title, Map<String, String> students) {
                         PaymentModel.getMonthName(selectedDate.month);
                     monthName = monthName.substring(0, 1).toLowerCase() +
                         monthName.substring(1);
-
+                        
                     GetFeesController.updateCashPayment(
                       widget.token,
                       monthName,
@@ -815,11 +806,7 @@ Widget buildStudentList(String title, Map<String, String> students) {
                       entry.key,
                     ).then((value) {
                       if (value) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text("Cash Taken Successfully"),
-                          ),
-                        );
+                        showToast('Cash taken for ${entry.value}');
                         fetchPaymentStatus();
                       }
                     });

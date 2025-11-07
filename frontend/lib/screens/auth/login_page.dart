@@ -21,6 +21,8 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   bool _obscureText = true;
+  bool _isLoading = false;
+
   final TextEditingController _email = TextEditingController();
   final TextEditingController _password = TextEditingController();
 
@@ -109,27 +111,32 @@ class _LoginPageState extends State<LoginPage> {
                     SizedBox(
                       width: double.infinity,
                       child: FilledButton(onPressed: () async {
+                        setState(() => _isLoading = true);
                         try {
                               if (_email.text.trim() == '' ||
                                   _password.text.trim() == '') {
                                 showToast(
                                   'Empty email/password fields'
                                 );
+                                setState(() => _isLoading = false);
                                 return;
+                                
                               }
                               // 1️⃣ Attempt login first — validates user existence and password
                               final loginResponse = await AuthController.login(
                                 _email.text.trim(),
                                 _password.text.trim(),
                               );
+                              setState(() => _isLoading = false);
+
 
                               if (loginResponse == null) {
                                 showToast(
                                   'Invalid email or password',
                                 );
+                                setState(() => _isLoading = false);
                                 return;
                               }
-
                               // 2️⃣ Now safely check if user is approved
                               bool isApproved =
                                   await AuthController.checkIfApproved(
@@ -141,6 +148,7 @@ class _LoginPageState extends State<LoginPage> {
                                   MaterialPageRoute(
                                       builder: (_) => ApprovalPending()),
                                 );
+                                setState(() => _isLoading = false);
                                 return;
                               }
 
@@ -160,6 +168,8 @@ class _LoginPageState extends State<LoginPage> {
                               // 5️⃣ Fetch user details via provider
                               Provider.of<UserProvider>(context, listen: false)
                                   .fetchUserDetails(_email.text.trim(), token);
+                               setState(() => _isLoading = false);
+
 
                               // 6️⃣ Navigate based on role
                               Widget targetPage;
@@ -180,20 +190,29 @@ class _LoginPageState extends State<LoginPage> {
                                   return;
                               }
 
+
                               Navigator.pushReplacement(
                                 context,
                                 MaterialPageRoute(builder: (_) => targetPage),
                               );
-                            } catch (e) {
-                              // 7️⃣ Handle all errors gracefully
-                              print('Login error: $e');
-
-                              showToast(
-                                e.toString().replaceFirst('Exception: ', ''),
-                              );
-                            }
-                          },
-                          child: Text('Login')),
+                          } catch (e) {
+                            // Handle all errors gracefully
+                            setState(() => _isLoading = false);
+                            showToast(
+                              e.toString().replaceFirst('Exception: ', ''),
+                            );
+                          }
+                        },
+                          child: _isLoading
+                                        ? const SizedBox(
+                                            height: 20,
+                                            width: 20,
+                                            child: CircularProgressIndicator(
+                                              color: Colors.white,
+                                              strokeWidth: 2,
+                                            ),
+                                          )
+                                        : const Text("Login"),),
                     ),
                     // const SizedBox(height: 5),
                      TextButton(

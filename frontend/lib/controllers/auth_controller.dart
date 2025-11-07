@@ -156,6 +156,27 @@ class AuthController {
     }
   }
 
+  static Future<String> getNamefromID(String token, String id) async {
+    final url = Uri.parse('${URL.chatURL}/classes/get-user-name?userId=$id');
+
+    final response = await http.get(
+      url,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token', 
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      final name = (data['name']);
+      return name;
+    }
+    else {
+      throw Exception("Failed to fetch Name from $id");
+    }
+  }
+
   static Future<Map<String, dynamic>> requestOtp(String identifier) async {
     final url = Uri.parse('$_baseURL/auth/password/request-otp');
 

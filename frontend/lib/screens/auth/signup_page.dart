@@ -120,7 +120,7 @@ void _onNameChanged(String name) {
                                     Text("Student"),
                                     Switch(
                                       value: isTeacher,
-                                      activeColor: Colors.teal,
+                                      activeThumbColor: Colors.teal,
                                       onChanged: (value) {
                                         setState(() {
                                           isTeacher = value;

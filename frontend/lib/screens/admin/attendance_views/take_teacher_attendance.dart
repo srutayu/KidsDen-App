@@ -3,6 +3,7 @@ import 'package:frontend/controllers/attendance_controller.dart';
 import 'package:frontend/controllers/classroom_controller.dart';
 import 'package:frontend/models/classroom_model.dart';
 import 'package:frontend/provider/auth_provider.dart';
+import 'package:frontend/screens/widgets/toast_message.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
@@ -76,9 +77,7 @@ class _TakeTeacherAttendanceState extends State<TakeTeacherAttendance> {
     );
 
     setState(() => _loading = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Attendance submitted successfully!')),
-    );
+    showToast('Attendance submitted successfully!');
   } catch (e) {
     setState(() => _loading = false);
     _showError('Error submitting attendance: $e');

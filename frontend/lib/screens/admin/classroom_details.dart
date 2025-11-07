@@ -297,21 +297,13 @@ Future<void> _removeStudent(ClassroomModel student) async {
             final feeText = feeController.text.trim();
 
             if (className.isEmpty || feeText.isEmpty) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Please enter both class name and fees'),
-                ),
-              );
+              showToast('Please enter both class name and fees');
               return;
             }
 
             final fee = double.tryParse(feeText);
             if (fee == null || fee < 0) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Please enter a valid fee amount'),
-                ),
-              );
+              showToast('Please enter a valid fee amount');
               return;
             }
 
