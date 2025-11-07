@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:fluttertoast/fluttertoast.dart';
 import 'package:frontend/controllers/auth_controller.dart';
 import 'package:frontend/provider/auth_provider.dart';
 import 'package:frontend/provider/user_data_provider.dart';
@@ -10,6 +9,7 @@ import 'package:frontend/screens/auth/change_password.dart';
 import 'package:frontend/screens/users/admin_page.dart';
 import 'package:frontend/screens/users/student_page.dart';
 import 'package:frontend/screens/users/teacher_page.dart';
+import 'package:frontend/screens/widgets/toast_message.dart';
 import 'package:provider/provider.dart';
 
 class LoginPage extends StatefulWidget {
@@ -112,9 +112,8 @@ class _LoginPageState extends State<LoginPage> {
                         try {
                               if (_email.text.trim() == '' ||
                                   _password.text.trim() == '') {
-                                Fluttertoast.showToast(
-                                  msg: 'Empty email/password fields',
-                                  fontSize: 16.0,
+                                showToast(
+                                  'Empty email/password fields'
                                 );
                                 return;
                               }
@@ -125,9 +124,8 @@ class _LoginPageState extends State<LoginPage> {
                               );
 
                               if (loginResponse == null) {
-                                Fluttertoast.showToast(
-                                  msg: 'Invalid email or password',
-                                  fontSize: 16.0,
+                                showToast(
+                                  'Invalid email or password',
                                 );
                                 return;
                               }
@@ -176,12 +174,8 @@ class _LoginPageState extends State<LoginPage> {
                                   targetPage = StudentPage();
                                   break;
                                 default:
-                                  Fluttertoast.showToast(
-                                    msg: 'Unknown role: $role',
-                                    toastLength: Toast.LENGTH_SHORT,
-                                    gravity: ToastGravity.BOTTOM,
-                                    textColor: Colors.white,
-                                    fontSize: 16.0,
+                                  showToast(
+                                    'Unknown role: $role',
                                   );
                                   return;
                               }
@@ -194,11 +188,8 @@ class _LoginPageState extends State<LoginPage> {
                               // 7️⃣ Handle all errors gracefully
                               print('Login error: $e');
 
-                              Fluttertoast.showToast(
-                                msg: e
-                                    .toString()
-                                    .replaceFirst('Exception: ', ''),
-                                fontSize: 16.0,
+                              showToast(
+                                e.toString().replaceFirst('Exception: ', ''),
                               );
                             }
                           },

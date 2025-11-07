@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:flutter/material.dart';
 import 'package:frontend/constants/url.dart';
 import 'package:frontend/controllers/class_controller.dart';
@@ -6,6 +7,7 @@ import 'package:frontend/controllers/fees_controller.dart';
 import 'package:frontend/controllers/payment_controller.dart';
 import 'package:frontend/models/payment_model.dart';
 import 'package:frontend/provider/auth_provider.dart';
+import 'package:frontend/screens/widgets/toast_message.dart';
 import 'package:http/http.dart' as http;
 import 'package:month_year_picker/month_year_picker.dart';
 import 'package:provider/provider.dart';
@@ -24,8 +26,6 @@ class CombinedFeesPaymentsPage extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text("Update Fees", style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 10),
             UpdateFeesContent(token: token!),
             const Divider(thickness: 2, height: 40),
             Text("Payment Records",
@@ -65,6 +65,7 @@ class _UpdateFeesContentState extends State<UpdateFeesContent> {
     try {
       final value = await FeesController.getAllClasses(widget.token);
       setState(() => classes = value);
+      print(classes);
     } catch (e) {
       debugPrint("Error Occurred While fetching classes: $e");
     }
@@ -87,55 +88,190 @@ class _UpdateFeesContentState extends State<UpdateFeesContent> {
         widget.token,
       );
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-            content:
-                Text(value ? "Fees updated for ${selectedClass} to ${_amountController.text}" : "Error occurred")),
-      );
+     showToast(value ? "Fees updated for $selectedClass to ₹${_amountController.text}" : "Error occurred");
     } catch (e) {
       debugPrint("Error updating fees: $e");
     }
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        DropdownButton<String>(
-          hint: const Text("Select Class"),
-          value: selectedClass,
-          onChanged: (value) {
-            setState(() => selectedClass = value);
-            if (value != null) fetchFeesForClass(value);
-          },
-          items: classes
-              .map((c) => DropdownMenuItem(value: c, child: Text(c)))
-              .toList(),
-        ),
-        const SizedBox(height: 16),
-        TextField(
-          controller: _amountController,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: "Fees Amount",
-            border: OutlineInputBorder(),
+ Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Center(
+      child: Card(
+        elevation: 6,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        color: theme.cardColor,
+        shadowColor: theme.shadowColor.withOpacity(0.2),
+        margin: const EdgeInsets.all(20),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 30),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                "Update Class Fees",
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  color: isDark
+                      ? Colors.white
+                      : Colors.black, // accent adapts
+                ),
+              ),
+              const SizedBox(height: 25),
+
+              // Dropdown with border
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                decoration: BoxDecoration(
+                  border: Border.all(
+                    color: isDark
+                        ? Colors.white24
+                        : Colors.grey.shade400, // subtle contrast
+                  ),
+                  borderRadius: BorderRadius.circular(15),
+                  color: isDark
+                      ? Colors.grey.shade900
+                      : Colors.grey.shade100, // adaptive background
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton2<String>(
+                    hint: Text(
+                      "Select Class",
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: isDark
+                            ? Colors.grey.shade400
+                            : Colors.grey.shade700,
+                      ),
+                    ),
+                    value: selectedClass,
+                    isExpanded: true,
+                    dropdownStyleData: DropdownStyleData(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(15),
+                        color:
+                            isDark ? Colors.grey.shade800 : Colors.grey.shade50,
+                        boxShadow: [
+                          BoxShadow(
+                            color: isDark
+                                ? Colors.black26
+                                : Colors.grey.withOpacity(0.3),
+                            blurRadius: 8,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                    ),
+                    onChanged: (value) {
+                      setState(() => selectedClass = value);
+                      if (value != null) fetchFeesForClass(value);
+                    },
+                    items: classes
+                        .map(
+                          (c) => DropdownMenuItem(
+                            value: c,
+                            child: Text(
+                              c,
+                              style: TextStyle(
+                                fontSize: 16,
+                                color: isDark
+                                    ? Colors.grey.shade200
+                                    : Colors.black87,
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // Amount text field
+              TextField(
+                controller: _amountController,
+                keyboardType: TextInputType.number,
+                style: TextStyle(
+                    color: isDark ? Colors.white : Colors.black, fontSize: 16),
+                decoration: InputDecoration(
+                  labelText: "Fees Amount",
+                  labelStyle: TextStyle(
+                      color: isDark
+                          ? Colors.grey.shade400
+                          : Colors.grey.shade700),
+                  prefixIcon: Icon(
+                    Icons.currency_rupee_rounded,
+                    color: isDark ? Colors.grey.shade400 : Colors.blueAccent,
+                  ),
+                  filled: true,
+                  fillColor:
+                      isDark ? Colors.grey.shade900 : Colors.grey.shade100,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(15),
+                  ),
+                  focusedBorder: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(15),
+                    borderSide: BorderSide(
+                        color: isDark
+                            ? theme.colorScheme.primary
+                            : Colors.blueAccent,
+                        width: 2),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 25),
+
+              // Submit button
+              SizedBox(
+                width: double.infinity,
+                height: 50,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    if (selectedClass != null &&
+                        _amountController.text.isNotEmpty) {
+                      updateFees();
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: const Text(
+                            "Please select a class and enter amount",
+                            style: TextStyle(color: Colors.white),
+                          ),
+                          backgroundColor:
+                              isDark ? Colors.redAccent.shade200 : Colors.red,
+                        ),
+                      );
+                    }
+                  },
+                  icon: Icon(Icons.save_rounded, color: isDark? Colors.black : Colors.white,),
+                  label: Text(
+                    "Update Fees",
+                    style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                        color: isDark ? Colors.black : Colors.white),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: isDark
+                        ? theme.colorScheme.primary
+                        : Colors.blueAccent,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                    elevation: 4,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
-        const SizedBox(height: 16),
-        ElevatedButton(
-          onPressed: () {
-            if (selectedClass != null && _amountController.text.isNotEmpty) {
-              updateFees();
-            } else {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                    content: Text("Please select a class and enter amount")),
-              );
-            }
-          },
-          child: const Text("Update Fees"),
-        ),
-      ],
+      ),
     );
   }
 }

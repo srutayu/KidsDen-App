@@ -1,10 +1,9 @@
 import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:fluttertoast/fluttertoast.dart';
 import 'package:frontend/controllers/auth_controller.dart';
 import 'package:frontend/screens/auth/approval_pending.dart';
 import 'package:frontend/screens/auth/login_page.dart';
+import 'package:frontend/screens/widgets/toast_message.dart';
 import 'package:intl_phone_field/intl_phone_field.dart';
 import 'package:intl_phone_field/phone_number.dart';
 
@@ -337,37 +336,36 @@ void _onNameChanged(String name) {
                                             final phone = _phone.text.trim().isEmpty ? null : _phone.text.trim();
                                            
                                             if (_name.text.isEmpty) {
-                                              Fluttertoast.showToast(
-                                                  msg: 'Name Required');
+                                              showToast('Name Required');
                                               return;
                                             } else if (!_isNameValid) {
-                                              Fluttertoast.showToast(
-                                                  msg:
+                                              showToast(
+                                                  
                                                       'Name cannot contain special characters or numbers');
                                               return;
                                             } else if (!isValidIndianPhoneNumber(
                                                 _phone.text)) {
-                                              Fluttertoast.showToast(
-                                                  msg: 'Invalid phone number');
+                                              showToast(
+                                                  'Invalid phone number');
                                               return;
                                             } else if (!isEmailValid) {
-                                              Fluttertoast.showToast(
-                                                  msg: 'Invalid Email');
+                                              showToast(
+                                                   'Invalid Email');
                                               return;
                                             } else if (email == null &&
                                                 phone == null) {
-                                              Fluttertoast.showToast(
-                                                  msg:
+                                              showToast(
+                                                  
                                                       'Either Phone or E-Mail required');
                                                       return;
                                             } else if (_password.text.isEmpty) {
-                                              Fluttertoast.showToast(
-                                                  msg: 'Password Required');
+                                              showToast(
+                                                   'Password Required');
                                               return;
                                             } else if (!isMatch ||
                                                 !isLengthValid) {
-                                              Fluttertoast.showToast(
-                                                  msg:
+                                              showToast(
+                                                  
                                                       'Password Criteria not met');
                                               return;
                                             }
@@ -416,8 +414,8 @@ void _onNameChanged(String name) {
                                                         "Exception: ", "");
                                               }
 
-                                              Fluttertoast.showToast(
-                                                  msg: errorMessage);
+                                              showToast(
+                                                  errorMessage);
                                             } finally {
                                               if (mounted) {
                                                 setState(
