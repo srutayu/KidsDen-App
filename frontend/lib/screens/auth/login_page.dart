@@ -88,7 +88,6 @@ class _LoginPageState extends State<LoginPage> {
                             });
                           },
                         ),
-                        
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(15),
                         ),
@@ -96,105 +95,103 @@ class _LoginPageState extends State<LoginPage> {
                     ),
                     const SizedBox(height: 5),
                     TextButton(
-                            onPressed: () {
-                              Navigator.push(context, MaterialPageRoute(builder: (_) => const ChangePasswordPage()));
-                            },
-                            style: TextButton.styleFrom(padding: EdgeInsets.zero),
-                            child: const Text(
-                              'Forgot Password?',
-                              style: TextStyle(
-                                color: Colors.blue,
-                                decoration: TextDecoration.underline,
-                              ),
-                            ),
-                          ),
+                      onPressed: () {
+                        Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (_) => const ChangePasswordPage()));
+                      },
+                      style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                      child: const Text(
+                        'Forgot Password?',
+                        style: TextStyle(
+                          color: Colors.blue,
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                    ),
                     SizedBox(
                       width: double.infinity,
-                      child: FilledButton(onPressed: () async {
-                        setState(() => _isLoading = true);
-                        try {
-                              if (_email.text.trim() == '' ||
-                                  _password.text.trim() == '') {
-                                showToast(
-                                  'Empty email/password fields'
-                                );
-                                setState(() => _isLoading = false);
-                                return;
-                                
-                              }
-                              // 1️⃣ Attempt login first — validates user existence and password
-                              final loginResponse = await AuthController.login(
-                                _email.text.trim(),
-                                _password.text.trim(),
-                              );
+                      child: FilledButton(
+                        onPressed: () async {
+                          setState(() => _isLoading = true);
+                          try {
+                            if (_email.text.trim() == '' ||
+                                _password.text.trim() == '') {
+                              showToast('Empty email/password fields');
                               setState(() => _isLoading = false);
+                              return;
+                            }
 
+                            bool isApproved =
+                                await AuthController.checkIfApproved(
+                                    _email.text.trim());
 
-                              if (loginResponse == null) {
-                                showToast(
-                                  'Invalid email or password',
-                                );
-                                setState(() => _isLoading = false);
-                                return;
-                              }
-                              // 2️⃣ Now safely check if user is approved
-                              bool isApproved =
-                                  await AuthController.checkIfApproved(
-                                      _email.text.trim());
-
-                              if (!isApproved) {
-                                Navigator.pushReplacement(
-                                  context,
-                                  MaterialPageRoute(
-                                      builder: (_) => ApprovalPending()),
-                                );
-                                setState(() => _isLoading = false);
-                                return;
-                              }
-
-                              // 3️⃣ Extract token, role, and other details
-                              String? role = loginResponse.user.role;
-                              String? token = loginResponse.token;
-
-                              final storage = const FlutterSecureStorage();
-
-                              // 4️⃣ Save token and email
-                              Provider.of<AuthProvider>(context, listen: false)
-                                  .setToken(token);
-                              await storage.write(key: 'token', value: token);
-                              await storage.write(
-                                  key: 'email', value: _email.text.trim());
-
-                              // 5️⃣ Fetch user details via provider
-                              Provider.of<UserProvider>(context, listen: false)
-                                  .fetchUserDetails(_email.text.trim(), token);
-                               setState(() => _isLoading = false);
-
-
-                              // 6️⃣ Navigate based on role
-                              Widget targetPage;
-                              switch (role) {
-                                case 'admin':
-                                  targetPage = AdminPage();
-                                  break;
-                                case 'teacher':
-                                  targetPage = TeacherPage();
-                                  break;
-                                case 'student':
-                                  targetPage = StudentPage();
-                                  break;
-                                default:
-                                  showToast(
-                                    'Unknown role: $role',
-                                  );
-                                  return;
-                              }
-
-
+                            if (!isApproved) {
                               Navigator.pushReplacement(
                                 context,
-                                MaterialPageRoute(builder: (_) => targetPage),
+                                MaterialPageRoute(
+                                    builder: (_) => ApprovalPending()),
                               );
+                              setState(() => _isLoading = false);
+                              return;
+                            }
+                            //  Attempt login first — validates user existence and password
+                            final loginResponse = await AuthController.login(
+                              _email.text.trim(),
+                              _password.text.trim(),
+                            );
+                            setState(() => _isLoading = false);
+
+                            if (loginResponse == null) {
+                              showToast(
+                                'Invalid email or password',
+                              );
+                              setState(() => _isLoading = false);
+                              return;
+                            }
+
+                            // 3️⃣ Extract token, role, and other details
+                            String? role = loginResponse.user.role;
+                            String? token = loginResponse.token;
+
+                            final storage = const FlutterSecureStorage();
+
+                            // 4️⃣ Save token and email
+                            Provider.of<AuthProvider>(context, listen: false)
+                                .setToken(token);
+                            await storage.write(key: 'token', value: token);
+                            await storage.write(
+                                key: 'email', value: _email.text.trim());
+
+                            // 5️⃣ Fetch user details via provider
+                            Provider.of<UserProvider>(context, listen: false)
+                                .fetchUserDetails(_email.text.trim(), token);
+                            setState(() => _isLoading = false);
+
+                            // 6️⃣ Navigate based on role
+                            Widget targetPage;
+                            switch (role) {
+                              case 'admin':
+                                targetPage = AdminPage();
+                                break;
+                              case 'teacher':
+                                targetPage = TeacherPage();
+                                break;
+                              case 'student':
+                                targetPage = StudentPage();
+                                break;
+                              default:
+                                showToast(
+                                  'Unknown role: $role',
+                                );
+                                return;
+                            }
+
+                            Navigator.pushReplacement(
+                              context,
+                              MaterialPageRoute(builder: (_) => targetPage),
+                            );
                           } catch (e) {
                             // Handle all errors gracefully
                             setState(() => _isLoading = false);
@@ -203,34 +200,35 @@ class _LoginPageState extends State<LoginPage> {
                             );
                           }
                         },
-                          child: _isLoading
-                                        ? const SizedBox(
-                                            height: 20,
-                                            width: 20,
-                                            child: CircularProgressIndicator(
-                                              color: Colors.white,
-                                              strokeWidth: 2,
-                                            ),
-                                          )
-                                        : const Text("Login"),),
+                        child: _isLoading
+                            ? const SizedBox(
+                                height: 20,
+                                width: 20,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text("Login"),
+                      ),
                     ),
                     // const SizedBox(height: 5),
-                     TextButton(
-                              onPressed: () {
-                                Navigator.pushReplacement(
-                                  context,
-                                  MaterialPageRoute(builder: (context) => SignUpPage()),
-                                );
-                              },
-                              style: TextButton.styleFrom(padding: EdgeInsets.zero),
-                              child: const Text(
-                                'Not registered? Sign up.',
-                                style: TextStyle(
-                                  color: Colors.blue,
-                                  decoration: TextDecoration.underline,
-                                ),
-                              ),
-                            ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.pushReplacement(
+                          context,
+                          MaterialPageRoute(builder: (context) => SignUpPage()),
+                        );
+                      },
+                      style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                      child: const Text(
+                        'Not registered? Sign up.',
+                        style: TextStyle(
+                          color: Colors.blue,
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),

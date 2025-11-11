@@ -26,7 +26,7 @@ class AdminRequestController {
     }
   }
 
-  static Future<bool>aproveSingleUser(userId, isApproved, token) async {
+  static Future<bool>approveSingleUser(userId, isApproved, token) async {
     final url  = Uri.parse('$_baseURL/admin/approve-user');
     final response = await http.put(url,
         headers: {

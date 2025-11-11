@@ -13,229 +13,270 @@ class MemberRequest extends StatefulWidget {
 }
 
 class _MemberRequestState extends State<MemberRequest> {
-
   List<UserRequest> _requests = [];
   bool _isLoading = true;
   String? _error;
 
-  late final token = Provider.of<AuthProvider>(context, listen:false).token;
+  late final token = Provider.of<AuthProvider>(context, listen: false).token;
 
   @override
-  void initState(){
+  void initState() {
     super.initState();
     fetchRequests();
   }
 
-  Future<void> fetchRequests() async{
+  Future<void> fetchRequests() async {
     try {
       // print(token);
-      List<UserRequest> requests = await AdminRequestController.getAllRequests(token);
+      List<UserRequest> requests =
+          await AdminRequestController.getAllRequests(token);
       setState(() {
         _requests = requests;
         _isLoading = false;
         _error = null;
       });
-    } catch(error) {
+    } catch (error) {
       setState(() {
         _error = error.toString();
         _isLoading = false;
       });
     }
   }
+
   @override
   Widget build(BuildContext context) {
-    if(_isLoading){
+    if (_isLoading) {
       return Center(
         child: CircularProgressIndicator(),
       );
     }
 
-    if(_error != null){
-      return Center(child: Text('Error: $_error'),);
+    if (_error != null) {
+      return Center(
+        child: Text('Error: $_error'),
+      );
     }
 
     return Scaffold(
       appBar: AppBar(
-        automaticallyImplyLeading: false,
-          title: Text("Member Requests")
-      ),
+          automaticallyImplyLeading: false, title: Text("Member Requests")),
       body: Column(
         children: [
           Expanded(
-            child: Center(
-              child: ListView.builder(
-  itemCount: _requests.length,
-  itemBuilder: (context, index) {
-    final user = _requests[index];
-
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16), // rounded edges
-      ),
-      elevation: 4, // slight shadow
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            // Row 1: Name + Role
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-              children: [
-                Text(
-                  "Name: ${user.name}",
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
+            child: RefreshIndicator(
+  onRefresh: fetchRequests,
+  child: _requests.isEmpty
+      ? ListView( // Must be scrollable for RefreshIndicator
+          children: const [
+            SizedBox(height: 200),
+            Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.inbox_outlined, size: 80, color: Colors.grey),
+                  SizedBox(height: 20),
+                  Text(
+                    "No pending requests",
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: Colors.grey,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 20),
-                Text(
-                  "Role: ${user.role[0].toUpperCase() + user.role.substring(1)}",
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
-            ),
-
-            const SizedBox(height: 12),
-
-            // Row 2: Approve + Reject Buttons
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                ElevatedButton(
-                  onPressed: () {
-                    AdminRequestController.aproveSingleUser(
-                      user.id,
-                      true,
-                      token,
-                    ).then((value) {
-                      if (value) {
-                        showToast('${user.name} Approved');
-                        setState(() {
-                          _requests.removeWhere((element) => element.id == user.id);
-                        });
-                      } else {
-                        print("Not Approved");
-                      }
-                    }).catchError((error) {
-                      print("Error occurred : $error");
-                    });
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.green,
-                    foregroundColor: Colors.white,
-                  ),
-                  child: const Row(
-                    children: [
-                      Text("Approve"),
-                      SizedBox(width: 10),
-                      Icon(Icons.check_circle),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 40),
-                ElevatedButton(
-                  onPressed: () {
-                    AdminRequestController.aproveSingleUser(
-                      user.id,
-                      false,
-                      token,
-                    ).then((value) {
-                      if (value) {
-                        AdminRequestController.deleteUser(user.id, token).then((value) {
-                          if (value) {
-                            print("User Rejected and Deleted");
-                          }
-                        }).catchError((errors) {
-                          print("error deleting user: $errors");
-                        });
-                        print("User Rejected successfully");
-                        setState(() {
-                          _requests.removeWhere((element) => element.id == user.id);
-                        });
-                      } else {
-                        print("Not Rejected");
-                      }
-                    }).catchError((error) {
-                      print("Error occurred : $error");
-                    });
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    foregroundColor: Colors.white,
-                  ),
-                  child: const Row(
-                    children: [
-                      Text("Reject"),
-                      SizedBox(width: 10),
-                      Icon(Icons.cancel_rounded),
-                    ],
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ],
-        ),
-      ),
-    );
-  },
-)
+        )
+      : ListView.builder(
+          itemCount: _requests.length,
+          itemBuilder: (context, index) {
+            final user = _requests[index];
+            return Card(
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              elevation: 4,
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    // Row 1: Name + Role
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        Text(
+                          "Name: ${user.name}",
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(width: 20),
+                        Text(
+                          "Role: ${user.role[0].toUpperCase() + user.role.substring(1)}",
+                          style: const TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
 
-            ),
+                    const SizedBox(height: 12),
+
+                    // Row 2: Approve + Reject Buttons
+                    Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: 20,
+                      runSpacing: 10,
+                      children: [
+
+                        //card approve button
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            AdminRequestController.approveSingleUser(
+                              user.id,
+                              true,
+                              token,
+                            ).then((value) {
+                              if (value) {
+                                showToast('${user.name} Approved');
+                                setState(() {
+                                  _requests.removeWhere(
+                                      (element) => element.id == user.id);
+                                });
+                              } else {
+                                print("Not Approved");
+                              }
+                            }).catchError((error) {
+                              print("Error occurred : $error");
+                            });
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.green,
+                            foregroundColor: Colors.white,
+                          ),
+                          icon: const Icon(Icons.check_circle),
+                          label: const Text("Approve"),
+                        ),
+
+                        //card reject button
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            AdminRequestController.approveSingleUser(
+                              user.id,
+                              false,
+                              token,
+                            ).then((value) {
+                              if (value) {
+                                AdminRequestController.deleteUser(
+                                  user.id,
+                                  token,
+                                ).then((value) {
+                                  if (value) {
+                                    showToast('${user.name} rejected and deleted');
+                                  }
+                                }).catchError((errors) {
+                                  print("Error deleting user: $errors");
+                                });
+                                setState(() {
+                                  _requests.removeWhere(
+                                      (element) => element.id == user.id);
+                                });
+                              } else {
+                                showToast("Not Rejected");
+                              }
+                            }).catchError((error) {
+                              print("Error occurred : $error");
+                            });
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: Colors.red,
+                            foregroundColor: Colors.white,
+                          ),
+                          icon: const Icon(Icons.cancel_rounded),
+                          label: const Text("Reject"),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        ),
+),
+
           ),
           Container(
-            height: 81,
-            color: Colors.teal,
-            padding: EdgeInsets.all(20),
-            child: Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                ElevatedButton(onPressed: () {
-                  // print("Approving All the Requests");
-                  AdminRequestController.approveAllUser(token).then((value) {
-                    if(value) {
-                      showToast("All requests are approved");
-                      setState(() {
-                        _requests.clear();
-                      });
-                    }
-                  },).catchError((error){
-                    print("Error Approving all requests: $error");
-                  });
-                }, child: Row(
-                  children: [
-                    Text("Approve All"),
-                    SizedBox(width: 20,),
-                    Icon(Icons.approval_outlined)
-                  ],
-                )),
-                SizedBox(width: 30,),
-                ElevatedButton(onPressed: () {
-                  // print("Rejecting All the Requests");
-                  AdminRequestController.rejectAllUsers(token).then((value) {
-                    if(value){
-                      showToast("All requests are rejected");
-                      setState(() {
-                        _requests.clear();
-                      });
-                    }
-                  },).catchError((error){
-                    print("Error Rejecting all the Requests: $error");
-                  });
-                }, child: Row(
-                  children: [
-                    Text("Reject All"),
-                    SizedBox(width: 20,),
-                    Icon(Icons.cancel_presentation)
-                  ],
-                ))
-              ],
-            ),
-          )
+              height: 81,
+              color: Colors.teal,
+              padding: EdgeInsets.all(20),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        // print("Approving All the Requests");
+                        AdminRequestController.approveAllUser(token).then(
+                          (value) {
+                            if (value) {
+                              if (_requests.isEmpty) {
+                                showToast('No pending requests!');
+                              } else {
+                                showToast("All requests are approved");
+                                setState(() {
+                                  _requests.clear();
+                                });
+                              }
+                            }
+                          },
+                        ).catchError((error) {
+                          print("Error Approving all requests: $error");
+                        });
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
+                      ),
+                      icon: const Icon(Icons.approval_outlined),
+                      label: const Text("Approve All"),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        // print("Rejecting All the Requests");
+                        AdminRequestController.rejectAllUsers(token).then(
+                          (value) {
+                            if (value) {
+                              if (_requests.isEmpty) {
+                                showToast('No pending requests!');
+                              } else {
+                                showToast("All requests are rejected");
+                                setState(() {
+                                  _requests.clear();
+                                });
+                              }
+                            }
+                          },
+                        ).catchError((error) {
+                          print("Error Rejecting all the Requests: $error");
+                        });
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.red,
+                        foregroundColor: Colors.white,
+                      ),
+                      icon: const Icon(Icons.cancel_presentation),
+                      label: const Text("Reject All"),
+                    ),
+                  ),
+                ],
+              ))
         ],
       ),
     );
