@@ -114,6 +114,7 @@ class _LoginPageState extends State<LoginPage> {
                       width: double.infinity,
                       child: FilledButton(
                         onPressed: () async {
+                          final storage = const FlutterSecureStorage();
                           setState(() => _isLoading = true);
                           try {
                             if (_email.text.trim() == '' ||
@@ -155,7 +156,7 @@ class _LoginPageState extends State<LoginPage> {
                             String? role = loginResponse.user.role;
                             String? token = loginResponse.token;
 
-                            final storage = const FlutterSecureStorage();
+                            
 
                             // 4️⃣ Save token and email
                             Provider.of<AuthProvider>(context, listen: false)

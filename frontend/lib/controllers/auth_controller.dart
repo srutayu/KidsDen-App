@@ -90,7 +90,7 @@ class AuthController {
     });
     // print(token);
     Map<String, dynamic> jsonMap = json.decode(response.body);
-    if(response.statusCode == 200){
+    if(response.statusCode == 200 || response.statusCode == 400){
       return true;
     } else {
       print("Logout Error: ${jsonMap['message']}");

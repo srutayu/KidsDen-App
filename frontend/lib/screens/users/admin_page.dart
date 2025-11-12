@@ -30,7 +30,7 @@ class _AdminPageState extends State<AdminPage> {
     super.initState();
     
     _pages=[
-      ClassListScreen(authToken: token),
+      ClassListScreen(),
       ClassroomDetails(),
       MemberRequest(),
       CombinedFeesPaymentsPage(),
