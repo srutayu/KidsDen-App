@@ -47,16 +47,25 @@ app.get('/health', (req, res) => {
     });
 // Map to track socket IDs and their user roles
 const socketRoles = new Map();
+const recentLocalEmits = new Set();
+const RECENT_EMIT_TTL_MS = 60 * 1000; // keep id for 60s then forget
 sub.subscribe('chatMessages');
 
 sub.on('message', (channel, message) => {
   if (channel === 'chatMessages') {
     const data = JSON.parse(message);
+    try {
+      if (data && data._id && recentLocalEmits.has(data._id)) {
+        recentLocalEmits.delete(data._id);
+        return;
+      }
+    } catch (e) {
+      console.error('Error checking recentLocalEmits:', e);
+    }
     const room = `class_${data.classId}`;
     (async () => {
       try {
         let content = data.message;
-        // If content is string try to parse JSON
         let parsed = null;
         if (typeof content === 'string') {
           try { parsed = JSON.parse(content); } catch (e) { parsed = null; }
@@ -132,24 +141,35 @@ socket.on('message', async (data) => {
       senderRole: user.role,
       timestamp: new Date().toISOString()
     };
-    
-    // First save to database
-    // try {
-    //   const Message = require('./models/messageModel'); // Make sure you have this model
-    //   await Message.create({
-    //     classId: data.classId,
-    //     sender: data.sender,
-    //     content: data.message,
-    //     timestamp: new Date()
-    //   });
-    // } catch (error) {
-    //   console.error('Error saving message to DB:', error);
-    // }
-    
-    // Then broadcast via Redis
-    await pub.publish('chatMessages', JSON.stringify(messageData));
-    await produceMessage(data, data.sender);
-    console.log('Message published for class:', data.classId, 'by user:', data.sender);
+    // Immediately broadcast to connected sockets in the class room so the UI
+    // receives the message without waiting for Redis/Kafka round-trips.
+    try {
+      const room = `class_${data.classId}`;
+      io.to(room).emit('message', {
+        _id: messageData._id,
+        classId: messageData.classId,
+        content: messageData.message,
+        sender: messageData.sender,
+        senderRole: messageData.senderRole,
+        timestamp: messageData.timestamp
+      });
+      console.log(`Immediate emit to room ${room} for message ${messageData._id}`);
+    } catch (emitErr) {
+      console.error('Error emitting immediate message:', emitErr);
+    }
+
+    // Fire-and-forget publish/produce so the server doesn't block the socket
+    // handler. Errors are logged but do not block the real-time emit.
+    pub.publish('chatMessages', JSON.stringify(messageData)).catch(e => {
+      console.error('Redis publish failed:', e);
+    });
+
+    produceMessage(data, data.sender).then(() => {
+      console.log('Kafka produce completed for', data.classId, 'by', data.sender);
+    }).catch(e => {
+      console.error('Kafka produce failed:', e);
+    });
+    console.log('Message processing initiated for class:', data.classId, 'by user:', data.sender);
   }
 });
 
