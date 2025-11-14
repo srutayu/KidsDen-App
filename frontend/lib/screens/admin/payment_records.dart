@@ -5,6 +5,7 @@ import 'package:frontend/constants/url.dart';
 import 'package:frontend/controllers/class_controller.dart';
 import 'package:frontend/controllers/fees_controller.dart';
 import 'package:frontend/controllers/payment_controller.dart';
+import 'package:frontend/models/classroom_model.dart';
 import 'package:frontend/models/payment_model.dart';
 import 'package:frontend/provider/auth_provider.dart';
 import 'package:frontend/screens/widgets/toast_message.dart';
@@ -49,8 +50,10 @@ class UpdateFeesContent extends StatefulWidget {
 }
 
 class _UpdateFeesContentState extends State<UpdateFeesContent> {
-  String? selectedClass;
-  List<String> classes = [];
+  String? selectedClassId;
+  String? selectedClassName;
+
+  List<ClassroomModel> classes = [];
   final TextEditingController _amountController = TextEditingController();
 
   @override
@@ -61,7 +64,7 @@ class _UpdateFeesContentState extends State<UpdateFeesContent> {
 
   Future<void> fetchClasses() async {
     try {
-      final value = await FeesController.getAllClasses(widget.token);
+      final value = await ClassController.getClasses(widget.token);
       setState(() => classes = value);
       print(classes);
     } catch (e) {
@@ -81,12 +84,12 @@ class _UpdateFeesContentState extends State<UpdateFeesContent> {
   Future<void> updateFees() async {
     try {
       final value = await FeesController.updateFeesAmountByClassId(
-        selectedClass,
+        selectedClassId!,
         _amountController.text,
         widget.token,
       );
 
-     showToast(value ? "Fees updated for $selectedClass to ₹${_amountController.text}" : "Error occurred");
+     showToast(value ? "Fees updated for $selectedClassName to ₹${_amountController.text}" : "Error occurred");
     } catch (e) {
       debugPrint("Error updating fees: $e");
     }
@@ -126,17 +129,13 @@ class _UpdateFeesContentState extends State<UpdateFeesContent> {
                 padding: const EdgeInsets.symmetric(horizontal: 12),
                 decoration: BoxDecoration(
                   border: Border.all(
-                    color: isDark
-                        ? Colors.white24
-                        : Colors.grey.shade400, // subtle contrast
+                    color: isDark ? Colors.white24 : Colors.grey.shade400,
                   ),
                   borderRadius: BorderRadius.circular(15),
-                  color: isDark
-                      ? Colors.grey.shade900
-                      : Colors.grey.shade100, // adaptive background
+                  color: isDark ? Colors.grey.shade900 : Colors.grey.shade100,
                 ),
                 child: DropdownButtonHideUnderline(
-                  child: DropdownButton2<String>(
+                  child: DropdownButton2<ClassroomModel>(
                     hint: Text(
                       "Select Class",
                       style: TextStyle(
@@ -146,8 +145,16 @@ class _UpdateFeesContentState extends State<UpdateFeesContent> {
                             : Colors.grey.shade700,
                       ),
                     ),
-                    value: selectedClass,
+
+                    //  Selected value is the FULL model
+                    value: selectedClassId == null
+                        ? null
+                        : classes.firstWhere(
+                            (c) => c.id == selectedClassId,
+                          ),
+
                     isExpanded: true,
+
                     dropdownStyleData: DropdownStyleData(
                       decoration: BoxDecoration(
                         borderRadius: BorderRadius.circular(15),
@@ -164,26 +171,37 @@ class _UpdateFeesContentState extends State<UpdateFeesContent> {
                         ],
                       ),
                     ),
+
+                    // 👇 When user selects a class
                     onChanged: (value) {
-                      setState(() => selectedClass = value);
-                      if (value != null) fetchFeesForClass(value);
+                      if (value != null) {
+                        setState(() {
+                          selectedClassId = value.id; // store ID internally
+                          selectedClassName = value.name; // for display
+                        });
+
+                        print("Selected Class ID: $selectedClassId");
+                        print("Selected Class Name: $selectedClassName");
+
+                        fetchFeesForClass(
+                            selectedClassId!); // send ID to backend
+                      }
                     },
-                    items: classes
-                        .map(
-                          (c) => DropdownMenuItem(
-                            value: c,
-                            child: Text(
-                              c,
-                              style: TextStyle(
-                                fontSize: 16,
-                                color: isDark
-                                    ? Colors.grey.shade200
-                                    : Colors.black87,
-                              ),
-                            ),
+
+                    // 👇 Dropdown items
+                    items: classes.map((c) {
+                      return DropdownMenuItem<ClassroomModel>(
+                        value: c,
+                        child: Text(
+                          c.name,
+                          style: TextStyle(
+                            fontSize: 16,
+                            color:
+                                isDark ? Colors.grey.shade200 : Colors.black87,
                           ),
-                        )
-                        .toList(),
+                        ),
+                      );
+                    }).toList(),
                   ),
                 ),
               ),
@@ -231,7 +249,7 @@ class _UpdateFeesContentState extends State<UpdateFeesContent> {
                 height: 50,
                 child: ElevatedButton.icon(
                   onPressed: () {
-                    if (selectedClass != null &&
+                    if (selectedClassName != null &&
                         _amountController.text.isNotEmpty) {
                       updateFees();
                     } else {
@@ -279,7 +297,9 @@ class PaymentRecordsContent extends StatefulWidget {
 class _PaymentRecordsContentState extends State<PaymentRecordsContent> {
   static final _baseURL = URL.baseURL;
 
-  String? selectedClass;
+  ClassroomModel? selectedClassModel;
+  String? selectedClassName;
+  String? selectedClassId;
   DateTime selectedDate = DateTime.now();
   bool loading = false;
 
@@ -293,7 +313,7 @@ class _PaymentRecordsContentState extends State<PaymentRecordsContent> {
   Map<String, String> listOfUnpaidStudent = {};
   Map<String, String> listOfPendingStudent = {};
 
-  List<String> classes = [];
+  List<ClassroomModel> classes = [];
 
   final Map<String, String> _userNameCache = {};
 
@@ -304,7 +324,7 @@ class _PaymentRecordsContentState extends State<PaymentRecordsContent> {
   }
 
   void fetchClasses() async {
-    List<String> fetchedClasses =
+    List<ClassroomModel> fetchedClasses =
         await ClassController.getClasses(widget.token);
     
     if (!mounted) return;
@@ -312,7 +332,7 @@ class _PaymentRecordsContentState extends State<PaymentRecordsContent> {
     setState(() {
       classes = fetchedClasses;
       if (classes.isNotEmpty) {
-        selectedClass = classes[0];
+        selectedClassName = classes[0].name;
         fetchPaymentStatus();
       }
     });
@@ -362,7 +382,7 @@ class _PaymentRecordsContentState extends State<PaymentRecordsContent> {
   }
 
  Future<void> fetchPaymentStatus() async {
-  if (selectedClass == null) return;
+  if (selectedClassId == null) return;
 
   if (!mounted) return;
   setState(() => loading = true);
@@ -372,7 +392,7 @@ class _PaymentRecordsContentState extends State<PaymentRecordsContent> {
   final monthName = PaymentModel.getMonthName(monthNumber);
 
   final url = Uri.parse(
-    '$_baseURL/admin/get-status?classId=$selectedClass&year=$year&month=$monthName',
+    '$_baseURL/admin/get-status?classId=$selectedClassId&year=$year&month=$monthName',
   );
 
   try {
@@ -518,121 +538,114 @@ Widget build(BuildContext context) {
                 const SizedBox(height: 20),
 
                   // Class Dropdown
-                  Row(
-                    children: [
-                      const Icon(Icons.class_rounded, color: Colors.blueAccent),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color:
-                                isDark
-                                    ? Colors.grey.shade900
-                                    : Colors.grey.shade100,
-                            border: Border.all(
-                              color: isDark
-                                  ? Colors.white24
-                                  : Colors.grey.shade300,
-                            ),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          child: DropdownButtonHideUnderline(
-                            child: DropdownButton2<String>(
-                              isExpanded: true,
-                              value: selectedClass,
-                              hint: Text(
-                                'Select Class',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  color: isDark
-                                      ? Colors.grey.shade400
-                                      : Colors.grey.shade700,
-                                ),
-                              ),
-                              items: classes
-                                  .map(
-                                    (cls) => DropdownMenuItem(
-                                      value: cls,
-                                      child: Text(
-                                        cls,
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          color: Theme.of(context).brightness ==
-                                                  Brightness.dark
-                                              ? Colors.white
-                                              : Colors.black,
-                                        ),
-                                      ),
-                                    ),
-                                  )
-                                  .toList(),
-                              onChanged: (value) {
-                                if (value != null) {
-                                  setState(() => selectedClass = value);
-                                  fetchPaymentStatus();
-                                }
-                              },
+                Row(
+  children: [
+    const Icon(Icons.class_rounded, color: Colors.blueAccent),
+    const SizedBox(width: 10),
 
-                              // 🔹 Button style (appearance of the dropdown box)
-                              buttonStyleData: ButtonStyleData(
-                                padding:
-                                    const EdgeInsets.symmetric(horizontal: 12),
-                                height: 50,
-                                decoration: BoxDecoration(
-                                  color: Colors.transparent,
-                                  borderRadius: BorderRadius.circular(12),
-                                ),
-                              ),
+    Expanded(
+      child: Container(
+        decoration: BoxDecoration(
+          color: isDark ? Colors.grey.shade900 : Colors.grey.shade100,
+          border: Border.all(
+            color: isDark ? Colors.white24 : Colors.grey.shade300,
+          ),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 8),
 
-                              // 🔹 Dropdown menu styling
-                              dropdownStyleData: DropdownStyleData(
-                                maxHeight: 250,
-                                decoration: BoxDecoration(
-                                  color: isDark
-                                      ? Colors.grey
-                                      : Colors.white,
-                                  borderRadius: BorderRadius.circular(12),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Theme.of(context).brightness ==
-                                              Brightness.dark
-                                          ? Colors.black38
-                                          : const Color.fromARGB(255, 220, 220, 220),
-                                      blurRadius: 8,
-                                      offset: const Offset(0, 3),
-                                    ),
-                                  ],
-                                ),
-                                scrollbarTheme: ScrollbarThemeData(
-                                  thumbVisibility:
-                                      WidgetStateProperty.all(true),
-                                  thickness: WidgetStateProperty.all(4),
-                                  radius: const Radius.circular(10),
-                                ),
-                              ),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton2<ClassroomModel>(
+            isExpanded: true,
 
-                              // 🔹 Icon styling
-                              iconStyleData: IconStyleData(
-                                icon: Icon(
-                                  Icons.arrow_drop_down_rounded,
-                                  size: 28,
-                                  color: isDark
-                                      ? Colors.blueAccent.shade100
-                                      : Colors.blueAccent,
-                                ),
-                              ),
+            /// 🔹 The selected value must be a ClassroomModel
+            value: selectedClassModel,
 
-                              menuItemStyleData: const MenuItemStyleData(
-                                height: 48,
-                                padding: EdgeInsets.symmetric(horizontal: 12),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
+            hint: Text(
+              'Select Class',
+              style: TextStyle(
+                fontSize: 16,
+                color: isDark ? Colors.grey.shade400 : Colors.grey.shade700,
+              ),
+            ),
+
+            /// 🔹 Dropdown items
+            items: classes.map((cls) {
+              return DropdownMenuItem<ClassroomModel>(
+                value: cls,  // Full ClassroomModel object
+                child: Text(
+                  cls.name,
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: isDark ? Colors.white : Colors.black,
                   ),
+                ),
+              );
+            }).toList(),
+
+            /// 🔹 On change → Set ID + name + model
+            onChanged: (value) {
+              if (value != null) {
+                setState(() {
+                  selectedClassModel = value;
+                  selectedClassId = value.id;     // store ID
+                  selectedClassName = value.name; // store name
+                });
+
+                print("Selected class ID: $selectedClassId");
+                print("Selected class Name: $selectedClassName");
+
+                fetchPaymentStatus();  // your function
+              }
+            },
+
+            // 🔹 Button styling
+            buttonStyleData: ButtonStyleData(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              height: 50,
+              decoration: BoxDecoration(
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+
+            // 🔹 Dropdown styling
+            dropdownStyleData: DropdownStyleData(
+              maxHeight: 250,
+              decoration: BoxDecoration(
+                color: isDark ? Colors.grey : Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: isDark ? Colors.black38 : const Color(0xFFDCDCDC),
+                    blurRadius: 8,
+                    offset: const Offset(0, 3),
+                  ),
+                ],
+              ),
+            ),
+
+            iconStyleData: IconStyleData(
+              icon: Icon(
+                Icons.arrow_drop_down_rounded,
+                size: 28,
+                color: isDark
+                    ? Colors.blueAccent.shade100
+                    : Colors.blueAccent,
+              ),
+            ),
+
+            menuItemStyleData: const MenuItemStyleData(
+              height: 48,
+              padding: EdgeInsets.symmetric(horizontal: 12),
+            ),
+          ),
+        ),
+      ),
+    ),
+  ],
+),
+
 
                   const SizedBox(height: 16),
 

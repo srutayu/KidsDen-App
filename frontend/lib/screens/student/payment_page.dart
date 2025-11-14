@@ -23,9 +23,18 @@ class _PaymentPageState extends State<PaymentPage> {
   late final userData = Provider.of<UserProvider>(context, listen: false).user;
   String? _token;
   String? get token => _token;
+
+
+
+
   Future<void> getData() async {
     _token = await storage.read(key: 'token');
   }
+
+  Future<void> init() async {
+  await getData();       // <-- wait for token to load
+  fetchFeesData();       // <-- now it has the token
+}
 
 
   List<dynamic> fees = [];
@@ -36,13 +45,12 @@ class _PaymentPageState extends State<PaymentPage> {
   @override
   void initState() {
     super.initState();
+    init();
     _razorpay = Razorpay();
-
     _razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, _handlePaymentSuccess);
     _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _handlePaymentError);
     _razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
 
-    fetchFeesData();
   }
 
   Future<void> _refreshData() async {
