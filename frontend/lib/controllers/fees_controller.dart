@@ -30,34 +30,42 @@ class FeesController {
 
     if(response.statusCode == 200){
       Map<String, dynamic> jsonMap = jsonDecode(response.body);
-      int amount = jsonMap['amount'];
+      int amount = jsonMap['baseAmount'];
       return amount;
     } else {
       throw Exception("Failed to fetch amount from class");
     }
   }
 
-  static Future<bool> updateFeesAmountByClassId(classId, amount, token) async {
-    final url = Uri.parse("$_baseURL/fees/update-fees");
-    final response = await http.post(url,
-        headers: {'Content-Type':'application/json', 'Authorization': 'Bearer $token'
-        },
-    body: jsonEncode({
-      "classId" : classId,
-      "amount" : amount
-    })
-    );
+static Future<bool> updateFeesAmountByClassId(
+    String classId, String amount, String token) async {
 
-    if(response.statusCode == 200) {
-      Map<String, dynamic> responseData = jsonDecode(response.body);
-      if(responseData.containsKey("fees") && responseData['fees']['classId'] == classId) {
-        return true;
-      } else {
-        return false;
-      }
+  final url = Uri.parse("$_baseURL/fees/update-fees");
+
+  final response = await http.post(
+    url,
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': 'Bearer $token'
+    },
+    body: jsonEncode({
+      "classId": classId,
+      "amount": amount
+    }),
+  );
+
+  if (response.statusCode == 200) {
+    final data = jsonDecode(response.body);
+
+    if (data.containsKey("class") && data["class"]["_id"] == classId) {
+      return true;
     } else {
-      print("Update fees failed: ${response.statusCode}");
       return false;
     }
+  } else {
+    print("Update fees failed: ${response.statusCode}");
+    return false;
   }
+}
+
 }

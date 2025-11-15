@@ -109,7 +109,7 @@ class AttendanceController {
     final Map<String, dynamic> body = jsonDecode(response.body);
 
     if (body.containsKey('attendance_taken')) {
-      return body['attendance_taken'] == true;
+      return body['attendance_taken'];
     } else {
       throw Exception('Invalid response: missing "attendance_taken" key');
     }

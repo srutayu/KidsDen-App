@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
-import 'package:frontend/provider/auth_provider.dart';
 import 'package:frontend/provider/themeProvider.dart';
-import 'package:frontend/provider/user_data_provider.dart';
 import 'package:frontend/screens/admin/attendance_views/view_student_attendance.dart';
 import 'package:frontend/screens/chat/classlist.dart';
 import 'package:frontend/screens/teacher/attendance_page.dart';
@@ -19,19 +17,22 @@ class TeacherPage extends StatefulWidget {
 }
 
 class _TeacherPageState extends State<TeacherPage> {
-  late final token = Provider.of<AuthProvider>(context, listen: false).token!;
-  late final userId = Provider.of<UserProvider>(context, listen: false).user!.id;
-  late final userRole =  Provider.of<UserProvider>(context, listen: false).user!.role;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
   final storage= FlutterSecureStorage();
   int selectedIndex = 0;
   late List<Widget> _pages;
+ String? _token;
+  String? get token => _token;
+  Future<void> getData() async {
+    _token = await storage.read(key: 'token');
+  }
 
   @override
   void initState() {
     super.initState();
+    getData();
     _pages = [
-      ClassListScreen(authToken: token),
+      ClassListScreen(),
       ClassroomDetailsTeacher(),
       AttendancePage(),
       AttendanceView(),

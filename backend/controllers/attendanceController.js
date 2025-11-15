@@ -128,7 +128,7 @@ exports.checkTeacherAttendance = async (req, res) => {
             return res.status(400).json({ message: 'date is required' });
         }
 
-        const count = await studentAttendanceSchema.countDocuments({ date: normalizeDateToDay(date) });
+        const count = await teacherAttendanceSchema.countDocuments({ date: normalizeDateToDay(date) });
 
         return res.status(200).json({ attendance_taken: count > 0 });
     } catch (error) {

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:frontend/constants/url.dart';
+import 'package:frontend/provider/auth_provider.dart';
 import 'package:frontend/provider/user_data_provider.dart';
 import 'package:frontend/screens/widgets/greetingWidget.dart';
 import 'package:provider/provider.dart';
@@ -8,8 +9,6 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 
 class ClassListScreen extends StatefulWidget {
-  final String authToken; 
-  ClassListScreen({required this.authToken});
 
   @override
   _ClassListScreenState createState() => _ClassListScreenState();
@@ -18,8 +17,8 @@ class ClassListScreen extends StatefulWidget {
 class _ClassListScreenState extends State<ClassListScreen> {
   List classes = [];
   bool isLoading = true;
+    late final token = Provider.of<AuthProvider>(context, listen: false).token!;
 
-  late String userId = Provider.of<UserProvider>(context, listen: false).user!.id;
   late String role = Provider.of<UserProvider>(context, listen: false).user!.role;
   late final String username = Provider.of<UserProvider>(context, listen: false).user!.name;
 
@@ -32,10 +31,9 @@ class _ClassListScreenState extends State<ClassListScreen> {
 
   Future<void> fetchClasses() async {
     try {
-      // print("Token: ${widget.authToken}");
       final url = Uri.parse('${URL.chatURL}/classes/get-classes');
       final res = await http.get(url,
-        headers: {'Authorization': 'Bearer ${widget.authToken}'});
+        headers: {'Authorization': 'Bearer $token'});
         
       if (res.statusCode == 200) {
         final data = json.decode(res.body);
@@ -134,7 +132,7 @@ class _ClassListScreenState extends State<ClassListScreen> {
                         context,
                         MaterialPageRoute(
                           builder: (_) => ChatScreen(
-                            authToken: widget.authToken,
+                            authToken: token,
                             classId: classId,
                             className: className,
                           ),

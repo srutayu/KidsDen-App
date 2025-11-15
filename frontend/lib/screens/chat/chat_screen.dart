@@ -146,7 +146,7 @@ void _storePosition(TapDownDetails details) {
   _tapPosition = details.globalPosition;
 }
 
-void _showMessageMenu(BuildContext context, Map<dynamic, dynamic> msg, bool isMe) async {
+void _showMessageMenu(BuildContext context, Map<dynamic, dynamic> msg, bool isMe, bool isMedia) async {
   final RenderBox overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
 
   final selected = await showMenu<String>(
@@ -158,8 +158,8 @@ void _showMessageMenu(BuildContext context, Map<dynamic, dynamic> msg, bool isMe
       overlay.size.height - _tapPosition.dy,
     ),
     items: [
-      // Always allow copy
-      PopupMenuItem(
+      if (!isMedia)
+        PopupMenuItem(
         value: 'copy',
         child: Row(
           children: const [
@@ -169,6 +169,8 @@ void _showMessageMenu(BuildContext context, Map<dynamic, dynamic> msg, bool isMe
           ],
         ),
       ),
+      
+      
 
       // Only allow delete for user's own messages
       if (isMe)
@@ -933,6 +935,7 @@ Widget _buildFilePreview(Map parsed, String messageId, String sender) {
     final initials = getInitials(senderName);
 
     final bool isMe = currentUserId != null && senderId == currentUserId;
+    bool isMedia= false;
     final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     // Build the message bubble first, then wrap with GestureDetector for deletion
@@ -1006,6 +1009,7 @@ Widget _buildFilePreview(Map parsed, String messageId, String sender) {
                     }
 
                     if (parsed is Map && parsed['type'] == 'file') {
+                      isMedia= true;
                       // Pass the whole parsed map so we can handle local preview (base64) and server URL
                       final idKey = msg['_id'] as String? ?? '';
                       final bool isUploading = uploadingKeys.contains(idKey) ||
@@ -1092,13 +1096,13 @@ Widget _buildFilePreview(Map parsed, String messageId, String sender) {
     if (isMe) {
   return GestureDetector(
     onTapDown: (details) => _storePosition(details),
-    onLongPress: () => _showMessageMenu(context, msg, isMe),
+    onLongPress: () => _showMessageMenu(context, msg, isMe, isMedia),
     child: bubble,
   );
 } else {
   return GestureDetector(
     onTapDown: (details) => _storePosition(details),
-    onLongPress: () => _showMessageMenu(context, msg, isMe),
+    onLongPress: () => _showMessageMenu(context, msg, isMe, isMedia),
     child: bubble,
   );
 }

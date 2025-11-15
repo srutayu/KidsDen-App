@@ -3,10 +3,10 @@ const Payment = require("../models/paymentModel");
 const User = require("../models/userModel");
 const {sendPaymentConfirmationEmail} = require("../services/emailServices");
 const { sendWhatsAppMessage, sendTextMessage } = require('../services/whatsappService');
-const Fees = require("../models/feesModel");
 const Class = require("../models/classModel");
 
 const crypto = require("crypto");
+const classModel = require("../models/classModel");
 
 exports.createOrder = async (req, res) => {
   try {
@@ -87,7 +87,7 @@ exports.verifyPayment = async (req, res) => {
     const student = await User.findById(payment.studentId);
     let amount = payment.amount;
     if (payment.classId) {
-      const fees = await Fees.findOne({ classId: payment.classId });
+      const fees = await classModel.findOne({ _id: payment.classId });
       if (fees && fees.amount) {
         amount = fees.amount;
       }
@@ -202,18 +202,30 @@ exports.getMonthsByYear = async (req, res) => {
 };
 
 //Get the list of all classes from fees collection
+// exports.getClass = async (req, res) => {
+//   try {
+//     // Get all unique class names
+//     const classes = await Class.find().select('name').lean();
+//     // Extract unique names
+//     const uniqueNames = [...new Set(classes.map(cls => cls.name))];
+//     res.status(200).json({ classes: uniqueNames });
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).json({ message: 'Could not retrieve classes' });
+//   }
+// }
+
 exports.getClass = async (req, res) => {
   try {
-    // Get all unique class names
-    const classes = await Class.find().select('name').lean();
-    // Extract unique names
-    const uniqueNames = [...new Set(classes.map(cls => cls.name))];
-    res.status(200).json({ classes: uniqueNames });
+    const classes = await Class.find().select('_id name').lean();
+
+    res.status(200).json({ classes });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Could not retrieve classes' });
   }
-}
+};
+
 
 //month, year, studentId
 //get classId from studentId, and get amount from fees collection 
@@ -236,7 +248,7 @@ exports.updatePaymentRecordForOfflinePayment = async (req, res) => {
       return res.status(400).json({ message: 'Student does not have a class assigned' });
     }
     // Fetch fees in parallel with payment update
-    const feesPromise = Fees.findOne({ classId });
+    const feesPromise = Class.findById( classId);
 
     // Update payment record (no need to call .save())
     let payment = await Payment.findOneAndUpdate(

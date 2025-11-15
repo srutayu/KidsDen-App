@@ -1,13 +1,10 @@
-import 'dart:convert';
-
 import 'package:flutter/material.dart';
-import 'package:frontend/constants/url.dart';
+import 'package:frontend/controllers/auth_controller.dart';
 import 'package:frontend/provider/auth_provider.dart';
 import 'package:provider/provider.dart';
 import 'dart:io';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
-import 'package:http/http.dart' as http;
 
 class VideoPlayerScreen extends StatefulWidget {
   final String videoUrl; // can be a network URL or local file path
@@ -39,30 +36,14 @@ class _VideoPlayerScreenState extends State<VideoPlayerScreen> {
     fetchUserName(widget.senderID, token);
     _initializePlayer();
   }
-   Future<void> fetchUserName(String userId, String authToken) async {
-  if (userId.isEmpty) return;
-  try {
-    final uri = Uri.parse('${URL.chatURL}/classes/get-user-name?userId=$userId');
-    final response = await http.get(
-      uri,
-      headers: {
-        'Authorization': 'Bearer $authToken',
-        'Content-Type': 'application/json',
-      },
-    );
 
-    if (response.statusCode == 200) {
-      final data = json.decode(response.body);
-      setState(() {
-        senderName= data['name'];
-      });
-    } else {
-      return;
-    }
-  } catch (e) {
-    return;
+
+ Future<void> fetchUserName(String userId, String authToken) async {
+    final name = await AuthController.getNamefromID(token, userId);
+    setState(() {
+      senderName = name;
+    });
   }
-}
 
   Future<void> _initializePlayer() async {
     try {

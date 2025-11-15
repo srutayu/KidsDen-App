@@ -10,4 +10,7 @@ class ClassroomModel {
       name: json['name'] as String
     );
   }
+
+    @override
+  String toString() => "ClassroomModel(id: $id, name: $name)";
 }

@@ -245,63 +245,96 @@ Future<void> _removeStudent(ClassroomModel student) async {
     }
   }
 
-  void _showCreateClassDialog() {
-    final TextEditingController nameController = TextEditingController();
+ void _showCreateClassDialog() {
+  final TextEditingController nameController = TextEditingController();
+  final TextEditingController feeController = TextEditingController();
 
-    showDialog(
-      context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Create New Class'),
-          content: TextField(
+  showDialog(
+    context: context,
+    builder: (context) => AlertDialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
+      title: const Text(
+        'Create New Class',
+        style: TextStyle(fontWeight: FontWeight.w600),
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // 🏫 Class name input
+          TextField(
             controller: nameController,
             decoration: const InputDecoration(
               labelText: 'Class Name',
               hintText: 'Enter the new class name',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.class_rounded),
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            ElevatedButton(
-              onPressed: () async {
-                final className = nameController.text.trim();
-                if (className.isNotEmpty) {
-                  Navigator.pop(context);
-                  await _createClass(className, userId);
-                } else {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Class name cannot be empty')),
-                  );
-                }
-              },
-              child: const Text('Create'),
-            ),
-          ],
-        );
-      },
-    );
-  }
+          const SizedBox(height: 16),
 
-  Future<void> _createClass(String className, String userId) async {
+          // 💰 Fees input
+          TextField(
+            controller: feeController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'Fees Amount',
+              hintText: 'Enter the fees for this class',
+              border: OutlineInputBorder(),
+              prefixIcon: Icon(Icons.currency_rupee_rounded),
+            ),
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: () async {
+            final className = nameController.text.trim();
+            final feeText = feeController.text.trim();
+
+            if (className.isEmpty || feeText.isEmpty) {
+              showToast('Please enter both class name and fees');
+              return;
+            }
+
+            final fee = double.tryParse(feeText);
+            if (fee == null || fee < 0) {
+              showToast('Please enter a valid fee amount');
+              return;
+            }
+
+            Navigator.pop(context);
+            await _createClass(className, userId, fee);
+          },
+          child: const Text('Create'),
+        ),
+      ],
+    ),
+  );
+}
+
+
+  Future<void> _createClass(String className, String userId, dynamic fees) async {
     setState(() => _loading = true);
 
     try {
       final createdBy = userId;
 
-      await _controller.createClass(className, createdBy, token);
+      await _controller.createClass(className, createdBy, token, fees);
 
       // After creation, reload class list and select the new class
       final classes = await _controller.getAllClasses(token);
       setState(() {
         _classes = classes;
         if (classes.isNotEmpty) {
-          // Optionally select the new class by name or last inserted
           _selectedClass = classes.firstWhere((c) => c.name == className, orElse: () => classes[0]);
-          showToast('Class ${className} created');
+          showToast('Class $className created');
           _loadClassMembers(_selectedClass!.id);
+          // set fees for the newly created class
+          // FeesController.updateFeesAmountByClassId(className, fees, token);
         }
       });
     } catch (e) {

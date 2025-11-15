@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 import 'package:frontend/controllers/payment_controller.dart';
 import 'package:frontend/controllers/razorpay_controller.dart';
 import 'package:frontend/models/payment_model.dart';
-import 'package:frontend/provider/auth_provider.dart';
 import 'package:frontend/provider/user_data_provider.dart';
 import 'package:frontend/services/fees_service.dart';
 import 'package:provider/provider.dart';
@@ -17,10 +17,25 @@ class PaymentPage extends StatefulWidget {
 }
 
 class _PaymentPageState extends State<PaymentPage> {
+  final storage = FlutterSecureStorage();
   late int feeAmount;
   late Razorpay _razorpay;
-  late final token = Provider.of<AuthProvider>(context, listen: false).token;
   late final userData = Provider.of<UserProvider>(context, listen: false).user;
+  String? _token;
+  String? get token => _token;
+
+
+
+
+  Future<void> getData() async {
+    _token = await storage.read(key: 'token');
+  }
+
+  Future<void> init() async {
+  await getData();       // <-- wait for token to load
+  fetchFeesData();       // <-- now it has the token
+}
+
 
   List<dynamic> fees = [];
   bool isLoading = true;
@@ -30,13 +45,12 @@ class _PaymentPageState extends State<PaymentPage> {
   @override
   void initState() {
     super.initState();
+    init();
     _razorpay = Razorpay();
-
     _razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, _handlePaymentSuccess);
     _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _handlePaymentError);
     _razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
 
-    fetchFeesData();
   }
 
   Future<void> _refreshData() async {
