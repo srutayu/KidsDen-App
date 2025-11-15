@@ -10,13 +10,12 @@ exports.getClassesForUser = async (req, res) => {
         if(!userId){
             return res.status(401).json({message: 'Unauthorized'});
         }
-        // console.log("userId:", userId);
         const user = await User.findById(userId);
         if (!user) {
             throw new Error('User not found');
         }
         // assignedClasses is an array of class names
-        const classes = await Class.find({ name: { $in: user.assignedClasses } });
+        const classes = await Class.find({ _id: { $in: user.assignedClasses } });
         const result = classes.map(cls => ({
             classId: cls._id,
             className: cls.name

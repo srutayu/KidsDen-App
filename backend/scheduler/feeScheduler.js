@@ -1,9 +1,8 @@
 const cron = require('node-cron');
 const mongoose = require('mongoose');
-const Fees = require('../models/feesModel');
 const Payment = require('../models/paymentModel');
 const User = require('../models/userModel');
-// const { sendWhatsAppMessage } = require('../services/whatsappService');
+const Class = require('../models/classModel');
 require('dotenv').config();
 
 function isMasterProcess() {
@@ -20,7 +19,7 @@ function isMasterProcess() {
 let baseFees = {};
 
 async function cacheBaseFees() {
-    const feesList = await Fees.find({});
+    const feesList = await Class.find({});
     baseFees = {};
     for (const fee of feesList) {
         if (typeof fee.baseAmount === 'number' && !isNaN(fee.baseAmount)) {
@@ -29,7 +28,6 @@ async function cacheBaseFees() {
             console.error(`[FeeScheduler] [ERROR] Invalid baseAmount for Fees document with id: ${fee._id}`);
         }
     }
-    // console.log('[FeeScheduler] Base fees cached:', baseFees);
 }
 
 
@@ -58,7 +56,7 @@ async function startFeeScheduler() {
         const day = today.getDate();
         if (day === 1) {
             console.log('[FeeScheduler] Running immediate reset (1st of month)');
-            const feesList = await Fees.find({});
+            const feesList = await Class.find({});
             for (const fee of feesList) {
                 if (typeof fee.baseAmount === 'number') {
                     fee.amount = fee.baseAmount;
@@ -70,7 +68,7 @@ async function startFeeScheduler() {
             console.log('Fees reset to base amount.');
         } else if (day > 10) {
             console.log('[FeeScheduler] Running immediate penalty (after 10th of month)');
-            const feesList = await Fees.find({});
+            const feesList = await Class.find({});
             for (const fee of feesList) {
                 if (typeof fee.baseAmount === 'number' && typeof fee.amount === 'number') {
                     if (fee.amount === fee.baseAmount) {
@@ -145,7 +143,7 @@ async function startFeeScheduler() {
     // Add penalty on 11th of every month (midnight)
     cron.schedule('0 0 11 * *', async () => {
             console.log('Running penalty fee update (11th of month)');
-            const feesList = await Fees.find({});
+            const feesList = await Class.find({});
             for (const fee of feesList) {
                 if (typeof fee.baseAmount === 'number' && typeof fee.amount === 'number') {
                     if (fee.amount === fee.baseAmount) {
@@ -214,7 +212,7 @@ async function startFeeScheduler() {
     // Reset fees to base amount on 1st of every month (midnight)
     cron.schedule('0 0 1 * *', async () => {
         console.log('Resetting fees to base amount (1st of month)');
-        const feesList = await Fees.find({});
+        const feesList = await Class.find({});
         for (const fee of feesList) {
             if (typeof fee.baseAmount === 'number') {
                 fee.amount = fee.baseAmount;

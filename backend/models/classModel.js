@@ -17,7 +17,16 @@ const classSchema = new mongoose.Schema({
     createdBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
+    },
+    amount: {
+        type: Number, 
+        required: true
+    },
+    baseAmount: {
+        type: Number,
+        required: true
     }
+    
 }, { timestamps: true });
 
 

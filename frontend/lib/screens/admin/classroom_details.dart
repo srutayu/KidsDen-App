@@ -1,7 +1,6 @@
 import 'package:dropdown_button2/dropdown_button2.dart';
 import 'package:flutter/material.dart';
 import 'package:frontend/controllers/classroom_controller.dart';
-import 'package:frontend/controllers/fees_controller.dart';
 import 'package:frontend/models/classroom_model.dart';
 import 'package:frontend/provider/auth_provider.dart';
 import 'package:frontend/provider/user_data_provider.dart';
@@ -318,13 +317,13 @@ Future<void> _removeStudent(ClassroomModel student) async {
 }
 
 
-  Future<void> _createClass(String className, String userId, dynamic fee) async {
+  Future<void> _createClass(String className, String userId, dynamic fees) async {
     setState(() => _loading = true);
 
     try {
       final createdBy = userId;
 
-      await _controller.createClass(className, createdBy, token);
+      await _controller.createClass(className, createdBy, token, fees);
 
       // After creation, reload class list and select the new class
       final classes = await _controller.getAllClasses(token);
@@ -335,7 +334,7 @@ Future<void> _removeStudent(ClassroomModel student) async {
           showToast('Class $className created');
           _loadClassMembers(_selectedClass!.id);
           // set fees for the newly created class
-          FeesController.updateFeesAmountByClassId(className, fee, token);
+          // FeesController.updateFeesAmountByClassId(className, fees, token);
         }
       });
     } catch (e) {
