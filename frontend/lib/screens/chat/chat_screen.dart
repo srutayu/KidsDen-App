@@ -8,6 +8,7 @@ import 'package:frontend/screens/chat/image_viewer.dart';
 import 'package:frontend/screens/chat/media_gallery.dart';
 import 'package:frontend/screens/chat/pdf_viewer.dart';
 import 'package:frontend/screens/chat/videoPlayer.dart';
+import 'package:frontend/screens/widgets/measure_size.dart';
 import 'package:frontend/screens/widgets/toast_message.dart';
 import 'package:frontend/services/s3_services.dart';
 import 'package:intl/intl.dart';
@@ -56,14 +57,17 @@ class _ChatScreenState extends State<ChatScreen> {
   bool isTyping = false;
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-
-  // Cache: userId -> userName
+  List<DateTime> messageTimes = [];
+  List<String> dateLabels = [];
   Map<String, String> userNamesCache = {};
 
-  // Current logged-in userId
   late final currentUserId =
       Provider.of<UserProvider>(context, listen: false).user?.id;
   String? currentUserRole;
+
+  final ValueNotifier<String> floatingDate = ValueNotifier("");
+  final Map<int, double> _itemHeights = {};
+
 
   @override
   void initState() {
@@ -74,16 +78,35 @@ class _ChatScreenState extends State<ChatScreen> {
     _scrollController.addListener(_handleScroll);
   }
 
+  
 void _handleScroll() {
   final pos = _scrollController.position;
-
-  // --- 3️⃣ Preload next and previous few images ---
   final double offset = pos.pixels;
-  final int approxIndex = (offset / 180).floor();
 
+  final int approxIndex = (offset / 180).floor();
   _precacheNextImages(approxIndex);
   _precachePreviousImages(approxIndex);
+  
+  // Find which date section we're in
+  double cumulativeHeight = 0;
+  int dateIndex = 0;
+  
+  for (int i = 0; i < messages.length; i++) {
+    final height = _itemHeights[i] ?? 180; 
+    cumulativeHeight += height;
+    
+    if (cumulativeHeight > offset) {
+      dateIndex = i;
+      break;
+    }
+  }
+  
+  final int actualIndex = messages.length - 1 - dateIndex;
+  if (actualIndex >= 0 && actualIndex < dateLabels.length) {
+    floatingDate.value = dateLabels[actualIndex];
+  }
 }
+
 
 
 void _precacheNextImages(int currentIndex) async {
@@ -294,8 +317,28 @@ void _showMessageMenu(BuildContext context, Map<dynamic, dynamic> msg, bool isMe
         setState(() {
           messages = data;
         });
-        print(
-            'Fetched ${messages.length} messages for class ${widget.classId}');
+
+        for (var msg in messages) {
+  final dt = DateTime.parse(msg['timestamp']);
+  messageTimes.add(dt);
+
+  // Convert date to Today/Yesterday/dd MMM
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final msgDate = DateTime(dt.year, dt.month, dt.day);
+
+  String label;
+  if (msgDate == today) {
+    label = "Today";
+  } else if (msgDate == today.subtract(Duration(days: 1))) {
+    label = "Yesterday";
+  } else {
+    label = DateFormat("dd MMM yyyy").format(msgDate);
+  }
+
+  dateLabels.add(label);
+}
+
       }
     } catch (e) {
       print('Error fetching old messages: $e');
@@ -1206,117 +1249,162 @@ Widget _buildFilePreview(Map parsed, String messageId, String sender) {
               fit: BoxFit.cover,
             ),
           ),
-          SafeArea(
-            child: Column(
-              children: [
-                Expanded(
-                  child: ListView.builder(
-                    controller: _scrollController,
-                    reverse: true,
-                    itemCount: messages.length,
-                    itemBuilder: (_, i) =>
-                        buildMessage(messages[messages.length - 1 - i]),
+         SafeArea(
+ child: Stack(
+  children: [
+    Column(
+      children: [
+        Expanded(
+          child: ListView.builder(
+            controller: _scrollController,
+            reverse: true,
+            itemCount: messages.length,
+            itemBuilder: (_, i) {
+              final actualIndex = messages.length - 1 - i;
+              return MeasureSize(
+                onChange: (size) {
+                  if (_itemHeights[actualIndex] != size.height) {
+                    _itemHeights[actualIndex] = size.height;
+                    // Optional: you can call _recalculateTotalHeight() here if needed
+                  }
+                },
+                child: buildMessage(messages[actualIndex]),
+              );
+            })),
+
+          if (isTyping)
+            Padding(
+              padding: EdgeInsets.all(8),
+              child: Text(
+                'Someone is typing...',
+                style: TextStyle(fontStyle: FontStyle.italic),
+              ),
+            ),
+
+          if (currentUserRole != 'student')
+            Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  border: Border.all(
+                    color: Colors.grey,
+                    width: 1.5,
                   ),
+                  borderRadius: BorderRadius.circular(29),
                 ),
-                if (isTyping)
-                  Padding(
-                    padding: EdgeInsets.all(8),
-                    child: Text('Someone is typing...',
-                        style: TextStyle(fontStyle: FontStyle.italic)),
-                  ),
-                if (currentUserRole != 'student')
-                  Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.black54,
-                        border: Border.all(
-                          color: Colors.grey, // border color
-                          width: 1.5, // border thickness
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // Text input area
+                    Expanded(
+                      child: Container(
+                        constraints: const BoxConstraints(
+                          maxHeight: 150,
                         ),
-                        borderRadius: BorderRadius.circular(29),
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          // ✅ Text input area with internal scroll
-                          Expanded(
-                            child: Container(
-                              constraints: const BoxConstraints(
-                                maxHeight:
-                                    150, // limit height before scroll activates
-                              ),
-                              margin: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(29),
-                              ),
-                              child: Scrollbar(
-                                thumbVisibility:
-                                    false, // set true if you want a visible scrollbar
-                                child: SingleChildScrollView(
-                                  reverse:
-                                      true, // keeps cursor at bottom when typing long text
-                                  child: TextField(
-                                    controller: _controller,
-                                    keyboardType: TextInputType.multiline,
-                                    maxLines: null,
-                                    onChanged: (val) =>
-                                        sendTyping(val.isNotEmpty),
-                                    style: const TextStyle(color: Colors.black),
-                                    decoration: const InputDecoration(
-                                      hintText: 'Type a message',
-                                      hintStyle:
-                                          TextStyle(color: Colors.black54),
-                                      border: InputBorder
-                                          .none, // remove default border
-                                      contentPadding: EdgeInsets.symmetric(
-                                          horizontal: 16, vertical: 12),
-                                    ),
-                                  ),
+                        margin: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(29),
+                        ),
+                        child: Scrollbar(
+                          thumbVisibility: false,
+                          child: SingleChildScrollView(
+                            reverse: true,
+                            child: TextField(
+                              controller: _controller,
+                              keyboardType: TextInputType.multiline,
+                              maxLines: null,
+                              onChanged: (val) =>
+                                  sendTyping(val.isNotEmpty),
+                              style: const TextStyle(color: Colors.black),
+                              decoration: const InputDecoration(
+                                hintText: 'Type a message',
+                                hintStyle:
+                                    TextStyle(color: Colors.black54),
+                                border: InputBorder.none,
+                                contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 12,
                                 ),
                               ),
                             ),
                           ),
-
-                          // ✅ Action icons (attach + send)
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.attach_file),
-                                color: Colors.white,
-                                onPressed: uploadFile,
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.send),
-                                color: Colors.white,
-                                onPressed: () {
-                                  final text = _controller.text.trim();
-                                  if (text.isNotEmpty) sendMessage(text);
-                                },
-                              ),
-                            ],
-                          ),
-                        ],
+                        ),
                       ),
                     ),
-                  )
-                else
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Text(
-                      'You do not have permission to send messages.',
-                      style: TextStyle(color: Colors.black),
+
+                    // Icons
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.attach_file),
+                          color: Colors.white,
+                          onPressed: uploadFile,
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.send),
+                          color: Colors.white,
+                          onPressed: () {
+                            final text = _controller.text.trim();
+                            if (text.isNotEmpty) sendMessage(text);
+                          },
+                        ),
+                      ],
                     ),
-                  ),
-              ],
+                  ],
+                ),
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                'You do not have permission to send messages.',
+                style: TextStyle(color: Colors.black),
+              ),
             ),
-          ),
+        ],
+      ),
+
+      //Floating Date Header 
+      Positioned(
+        top: 10,
+        left: 0,
+        right: 0,
+        child: ValueListenableBuilder(
+          valueListenable: floatingDate,
+          builder: (_, value, __) {
+            if (value.isEmpty) return SizedBox.shrink();
+
+            return Center(
+              child: Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.6),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  value,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            );
+          },
+        ),
+      ),
+    ],
+  ),
+)
+
           ]
         ),
       );
 }
-
