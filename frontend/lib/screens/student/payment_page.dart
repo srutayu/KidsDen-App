@@ -62,7 +62,7 @@ class _PaymentPageState extends State<PaymentPage> {
 }
 
   Future<void> fetchFeesData() async {
-    final fetchedFee = await FeesService.fetchAmountByClass(
+    final fetchedFee = await GetFeesController.getFees(
         userData!.assignedClasses[0], token);
 
     if (mounted) {
