@@ -78,8 +78,6 @@ class _ChatScreenState extends State<ChatScreen> {
     fetchOldMessages();
     initSocket();
     _scrollController.addListener(_handleScroll);
-    // Rebuild list when opacity changes so inline separators can hide/show
-    // in sync with the floating date.
     floatingDateOpacity.addListener(() {
       if (_topVisibleIndex != -1 && mounted) setState(() {});
     });
@@ -383,56 +381,183 @@ void _showMessageMenu(BuildContext context, Map<dynamic, dynamic> msg, bool isMe
   }
 
   Future<void> fetchOldMessages() async {
-  Box<dynamic> box = await Hive.openBox<dynamic>('chat_${widget.classId}');
+  // --- Open meta box ---
+  final metaBox = await Hive.openBox('chat_sync_meta_${widget.classId}');
+  int localVersion = metaBox.get('chatVersion', defaultValue: 0);
+  int localLastFetchedAt = metaBox.get('lastFetchedAt', defaultValue: 0);
 
+  // --- Fetch server metadata ---
+  final metaRes = await http.get(
+    Uri.parse('${URL.chatURL}/classes/chat-metadata?classId=${widget.classId}'),
+    headers: {'Authorization': 'Bearer ${widget.authToken}'},
+  );
+
+  if (metaRes.statusCode != 200) {
+    print("❌ Failed to fetch metadata. Defaulting to full fetch.");
+  }
+
+  final metaData = json.decode(metaRes.body);
+  int serverVersion = metaData['version'];
+
+  String serverTsString = metaData['lastMessageTimestamp'];
+  int serverTs = 0;
+
+  serverTs = DateTime.parse(serverTsString).millisecondsSinceEpoch;
+
+  // --- Decide full or incremental fetch ---
+  bool shouldDoFullFetch = false;
+
+  if (serverVersion > localVersion) {
+    print("🔁 Server chat version increased → FULL FETCH");
+    shouldDoFullFetch = true;
+  } else if (serverTs > localLastFetchedAt) {
+    print("➕ New messages since lastFetchedAt → INCREMENTAL FETCH");
+    shouldDoFullFetch = false;
+  } else {
+    print("✔ Hive is fully up to date → NO FETCH NEEDED");
+    return;
+  }
+
+  // --- Open messages box ---
+  final box = await Hive.openBox<dynamic>('chat_${widget.classId}');
+
+//  full fetch
+  if (shouldDoFullFetch) {
+    final res = await http.get(
+      Uri.parse('${URL.chatURL}/classes/get-messages?classId=${widget.classId}'),
+      headers: {'Authorization': 'Bearer ${widget.authToken}'},
+    );
+
+    if (res.statusCode != 200) {
+      return;
+    }
+
+    final data = json.decode(res.body);
+
+    // Clear old & insert new
+    await box.clear();
+    await box.addAll(data);
+
+    // Update UI
+    if (mounted) {
+      setState(() => messages = box.values.toList());
+    } else {
+      messages = box.values.toList();
+    }
+
+    // Sort
     try {
-      final res = await http.get(
-        Uri.parse(
-            '${URL.chatURL}/classes/get-messages?classId=${widget.classId}'),
-        headers: {'Authorization': 'Bearer ${widget.authToken}'},
-      );
+      messages.sort((a, b) =>
+          DateTime.parse(a['timestamp']).compareTo(DateTime.parse(b['timestamp'])));
+    } catch (_) {}
 
-      if (res.statusCode == 200) {
-        final data = json.decode(res.body);
-        // If widget is already disposed, avoid calling setState
-        if (!mounted) {
-          messages = data;
-          return;
-        }
-        setState(() {
-          // messages = data;
-          box.addAll(data);
-          messages = box.values.toList();
+    // Update metadata
+    if (messages.isNotEmpty) {
+      final lastMillis =
+          DateTime.parse(messages.last['timestamp']).millisecondsSinceEpoch;
 
-        });
+      await metaBox.put('chatVersion', serverVersion);
+      await metaBox.put('lastFetchedAt', lastMillis);
+    }
 
-        
-        try {
-          messages.sort((a, b) => DateTime.parse(a['timestamp'])
-              .compareTo(DateTime.parse(b['timestamp'])));
-        } catch (e) {
-          // ignore parse/sort errors
-        }
+    print("✅ FULL FETCH complete.");
+    return;
+  }
 
-        if (messages.isNotEmpty) {
-          try {
-            final last = messages.last;
-            if (last['timestamp'] != null) {
-              final dt = DateTime.parse(last['timestamp']);
-              floatingDate.value = _dateLabelFor(dt);
-              floatingDateOpacity.value = 1.0;
-            }
-          } catch (e) {}
-        }
+// incremental fetch
 
-        // dateLabels/messageTimes removed — date separators are computed
-        // dynamically now, no precomputation required here.
+  String afterIso = DateTime.fromMillisecondsSinceEpoch(localLastFetchedAt)
+      .toUtc()
+      .toIso8601String();
+  
 
-      }
-    } catch (e) {
-      print('Error fetching old messages: $e');
+  final incRes = await http.get(
+    Uri.parse(
+        '${URL.chatURL}/classes/get-messages?classId=${widget.classId}&after=$afterIso'),
+    headers: {'Authorization': 'Bearer ${widget.authToken}'},
+  );
+
+  if (incRes.statusCode != 200) {
+    return;
+  }
+
+  final incData = json.decode(incRes.body);
+
+ if (incData is! List || incData.isEmpty) {
+  // Load existing Hive messages into UI
+  if (mounted) {
+    setState(() {
+      messages = box.values.toList();
+    });
+  } else {
+    messages = box.values.toList();
+  }
+
+  return;
+}
+
+  // Build duplicate check set
+  final existingIds = <String>{};
+  for (final item in box.values) {
+    try {
+      final id =
+          (item['id'] ?? item['_id'] ?? item['messageId'])?.toString();
+      if (id != null) existingIds.add(id);
+    } catch (_) {}
+  }
+
+  int newestMillis = localLastFetchedAt;
+
+  // Helper to get id
+  String? extractId(dynamic m) {
+    try {
+      return (m['id'] ?? m['_id'] ?? m['messageId'])?.toString();
+    } catch (_) {
+      return null;
     }
   }
+
+  int addedCount = 0;
+
+  for (final msg in incData) {
+    final msgId = extractId(msg);
+
+    // skip duplicates
+    if (msgId != null && existingIds.contains(msgId)) continue;
+
+    // Write to Hive
+    await box.add(msg);
+    addedCount++;
+
+    // track newest timestamp
+    try {
+      final ts = msg['timestamp'];
+      if (ts != null) {
+        final millis = DateTime.parse(ts).millisecondsSinceEpoch;
+        if (millis > newestMillis) newestMillis = millis;
+      }
+    } catch (_) {}
+  }
+
+  // Reload UI
+  if (mounted) {
+    setState(() => messages = box.values.toList());
+  } else {
+    messages = box.values.toList();
+  }
+
+  // Sort
+  try {
+    messages.sort((a, b) =>
+        DateTime.parse(a['timestamp']).compareTo(DateTime.parse(b['timestamp'])));
+  } catch (_) {}
+
+  // Update metadata
+  await metaBox.put('lastFetchedAt', newestMillis);
+
+  print("✅ Incremental fetch complete. Added $addedCount messages.");
+}
+
 
   void initSocket() {
     socket = IO.io(URL.socketURL, <String, dynamic>{
