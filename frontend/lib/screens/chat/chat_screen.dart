@@ -58,8 +58,6 @@ class _ChatScreenState extends State<ChatScreen> {
   bool isTyping = false;
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  List<DateTime> messageTimes = [];
-  List<String> dateLabels = [];
   Map<String, String> userNamesCache = {};
 
   late final currentUserId =
@@ -67,7 +65,9 @@ class _ChatScreenState extends State<ChatScreen> {
   String? currentUserRole;
 
   final ValueNotifier<String> floatingDate = ValueNotifier("");
+  final ValueNotifier<double> floatingDateOpacity = ValueNotifier(1.0);
   final Map<int, double> _itemHeights = {};
+  int _topVisibleIndex = -1;
 
 
 
@@ -78,6 +78,11 @@ class _ChatScreenState extends State<ChatScreen> {
     fetchOldMessages();
     initSocket();
     _scrollController.addListener(_handleScroll);
+    // Rebuild list when opacity changes so inline separators can hide/show
+    // in sync with the floating date.
+    floatingDateOpacity.addListener(() {
+      if (_topVisibleIndex != -1 && mounted) setState(() {});
+    });
   }
 
   
@@ -103,9 +108,85 @@ void _handleScroll() {
     }
   }
   
-  final int actualIndex = messages.length - 1 - dateIndex;
-  if (actualIndex >= 0 && actualIndex < dateLabels.length) {
-    floatingDate.value = dateLabels[actualIndex];
+  // dateIndex is the message index (from the top) where cumulativeHeight
+  // first exceeds the scroll offset — that corresponds to the topmost
+  // visible message.
+  final int topIndex = dateIndex;
+  if (topIndex >= 0 && topIndex < messages.length) {
+    try {
+      final ts = messages[topIndex]['timestamp'];
+      if (ts != null) {
+        final dt = DateTime.parse(ts);
+        final label = _dateLabelFor(dt);
+
+        final itemHeight = _itemHeights[topIndex] ?? 180.0;
+
+        // Estimate separator height based on text scale so it adapts across
+        // devices / accessibility settings. Base estimate 32 px.
+        final double baseSeparatorHeight = 32.0;
+        final double separatorHeight = baseSeparatorHeight * MediaQuery.of(context).textScaleFactor;
+
+        // Top of separator = top of message - separatorHeight
+        final sepTop = (cumulativeHeight - itemHeight) - separatorHeight;
+        final sepDistanceFromTop = sepTop - offset;
+
+        // Threshold in pixels: when separator is within this many pixels from
+        // the top, hide the floating date. Use separatorHeight + margin.
+        final double hideThreshold = separatorHeight + 24.0;
+
+        floatingDate.value = label;
+        final bool separatorNearby = _shouldShowDateSeparator(topIndex) ||
+            (topIndex + 1 < messages.length && _shouldShowDateSeparator(topIndex + 1));
+
+        // Update cached top index so itemBuilder can hide the inline separator
+        // for the top visible item while floating date is visible.
+        if (_topVisibleIndex != topIndex && mounted) {
+          setState(() {
+            _topVisibleIndex = topIndex;
+          });
+        }
+
+        if (separatorNearby && sepDistanceFromTop <= hideThreshold) {
+          floatingDateOpacity.value = 0.0;
+        } else {
+          floatingDateOpacity.value = 1.0;
+        }
+      }
+    } catch (e) {
+      // ignore parse errors
+    }
+  }
+}
+
+String _dateLabelFor(DateTime dt) {
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final msgDate = DateTime(dt.year, dt.month, dt.day);
+
+  if (msgDate == today) return 'Today';
+  if (msgDate == today.subtract(Duration(days: 1))) return 'Yesterday';
+  return DateFormat('dd MMM yyyy').format(msgDate);
+}
+
+bool _shouldShowDateSeparator(int index) {
+  if (messages.isEmpty) return false;
+  if (index < 0 || index >= messages.length) return false;
+  try {
+    final currentTs = messages[index]['timestamp'];
+    if (currentTs == null) return false;
+    final cur = DateTime.parse(currentTs);
+    final curDate = DateTime(cur.year, cur.month, cur.day);
+
+    if (index == 0) return true;
+
+    final prevTs = messages[index - 1]['timestamp'];
+    if (prevTs == null) return true;
+    final prev = DateTime.parse(prevTs);
+    final prevDate = DateTime(prev.year, prev.month, prev.day);
+
+    return curDate != prevDate;
+  } catch (e) {
+    return false;
   }
 }
 
@@ -325,26 +406,27 @@ void _showMessageMenu(BuildContext context, Map<dynamic, dynamic> msg, bool isMe
 
         });
 
-        for (var msg in messages) {
-  final dt = DateTime.parse(msg['timestamp']);
-  messageTimes.add(dt);
+        
+        try {
+          messages.sort((a, b) => DateTime.parse(a['timestamp'])
+              .compareTo(DateTime.parse(b['timestamp'])));
+        } catch (e) {
+          // ignore parse/sort errors
+        }
 
-  // Convert date to Today/Yesterday/dd MMM
-  final now = DateTime.now();
-  final today = DateTime(now.year, now.month, now.day);
-  final msgDate = DateTime(dt.year, dt.month, dt.day);
+        if (messages.isNotEmpty) {
+          try {
+            final last = messages.last;
+            if (last['timestamp'] != null) {
+              final dt = DateTime.parse(last['timestamp']);
+              floatingDate.value = _dateLabelFor(dt);
+              floatingDateOpacity.value = 1.0;
+            }
+          } catch (e) {}
+        }
 
-  String label;
-  if (msgDate == today) {
-    label = "Today";
-  } else if (msgDate == today.subtract(Duration(days: 1))) {
-    label = "Yesterday";
-  } else {
-    label = DateFormat("dd MMM yyyy").format(msgDate);
-  }
-
-  dateLabels.add(label);
-}
+        // dateLabels/messageTimes removed — date separators are computed
+        // dynamically now, no precomputation required here.
 
       }
     } catch (e) {
@@ -1227,6 +1309,8 @@ Widget _buildFilePreview(Map parsed, String messageId, String sender) {
   void dispose() {
     socket.dispose();
     _controller.dispose();
+    floatingDate.dispose();
+    floatingDateOpacity.dispose();
     super.dispose();
   }
 
@@ -1268,14 +1352,53 @@ Widget _buildFilePreview(Map parsed, String messageId, String sender) {
             itemCount: messages.length,
             itemBuilder: (_, i) {
               final actualIndex = messages.length - 1 - i;
-              return MeasureSize(
-                onChange: (size) {
-                  if (_itemHeights[actualIndex] != size.height) {
-                    _itemHeights[actualIndex] = size.height;
-                    // Optional: you can call _recalculateTotalHeight() here if needed
-                  }
-                },
-                child: buildMessage(messages[actualIndex]),
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_shouldShowDateSeparator(actualIndex))
+                    // Hide inline separator for the top visible message when
+                    // the floating date is visible to avoid showing two labels
+                    // at once.
+                    if (!(actualIndex == _topVisibleIndex && floatingDateOpacity.value > 0.1))
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8.0),
+                      child: Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).brightness == Brightness.dark
+                                ? Colors.black.withOpacity(0.6)
+                                : Colors.white.withOpacity(0.9),
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.06),
+                                blurRadius: 4,
+                              )
+                            ],
+                          ),
+                          child: Text(
+                            _dateLabelFor(DateTime.parse(messages[actualIndex]['timestamp'])),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Theme.of(context).brightness == Brightness.dark
+                                  ? Colors.white
+                                  : Colors.black87,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  MeasureSize(
+                    onChange: (size) {
+                      if (_itemHeights[actualIndex] != size.height) {
+                        _itemHeights[actualIndex] = size.height;
+                      }
+                    },
+                    child: buildMessage(messages[actualIndex]),
+                  ),
+                ],
               );
             })),
 
@@ -1378,35 +1501,45 @@ Widget _buildFilePreview(Map parsed, String messageId, String sender) {
       ),
 
       //Floating Date Header 
-      Positioned(
-        top: 10,
-        left: 0,
-        right: 0,
-        child: ValueListenableBuilder(
-          valueListenable: floatingDate,
-          builder: (_, value, __) {
-            if (value.isEmpty) return SizedBox.shrink();
+      // Positioned(
+      //   top: MediaQuery.of(context).padding.top + 12,
+      //   left: 0,
+      //   right: 0,
+      //   child: ValueListenableBuilder<double>(
+      //     valueListenable: floatingDateOpacity,
+      //     builder: (_, opacity, __) {
+      //       return AnimatedOpacity(
+      //         duration: const Duration(milliseconds: 220),
+      //         opacity: opacity,
+      //         curve: Curves.easeInOut,
+      //         child: ValueListenableBuilder(
+      //           valueListenable: floatingDate,
+      //           builder: (_, value, __) {
+      //             if (value.isEmpty) return SizedBox.shrink();
 
-            return Center(
-              child: Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.6),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  value,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                  ),
-                ),
-              ),
-            );
-          },
-        ),
-      ),
+      //             return Center(
+      //               child: Container(
+      //                 padding:
+      //                     const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      //                 decoration: BoxDecoration(
+      //                   color: Colors.black.withOpacity(0.6),
+      //                   borderRadius: BorderRadius.circular(12),
+      //                 ),
+      //                 child: Text(
+      //                   value,
+      //                   style: const TextStyle(
+      //                     color: Colors.white,
+      //                     fontSize: 12,
+      //                   ),
+      //                 ),
+      //               ),
+      //             );
+      //           },
+      //         ),
+      //       );
+      //     },
+      //   ),
+      // ),
     ],
   ),
 )
