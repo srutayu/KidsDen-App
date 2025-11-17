@@ -11,6 +11,7 @@ import 'package:frontend/screens/chat/videoPlayer.dart';
 import 'package:frontend/screens/widgets/measure_size.dart';
 import 'package:frontend/screens/widgets/toast_message.dart';
 import 'package:frontend/services/s3_services.dart';
+import 'package:hive_flutter/adapters.dart';
 import 'package:intl/intl.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
@@ -67,6 +68,7 @@ class _ChatScreenState extends State<ChatScreen> {
 
   final ValueNotifier<String> floatingDate = ValueNotifier("");
   final Map<int, double> _itemHeights = {};
+
 
 
   @override
@@ -300,6 +302,8 @@ void _showMessageMenu(BuildContext context, Map<dynamic, dynamic> msg, bool isMe
   }
 
   Future<void> fetchOldMessages() async {
+  Box<dynamic> box = await Hive.openBox<dynamic>('chat_${widget.classId}');
+
     try {
       final res = await http.get(
         Uri.parse(
@@ -315,7 +319,10 @@ void _showMessageMenu(BuildContext context, Map<dynamic, dynamic> msg, bool isMe
           return;
         }
         setState(() {
-          messages = data;
+          // messages = data;
+          box.addAll(data);
+          messages = box.values.toList();
+
         });
 
         for (var msg in messages) {
