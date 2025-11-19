@@ -20,7 +20,7 @@ exports.getUserData = async (req, res) => {
     } else {
       // 📱 Case 2: ID is a phone number
       let phone = email.trim(); // we’re reusing "email" param as "id"
-      if (!phone.startsWith('91') && phone.length === 10) {
+      if (phone.length === 10) {
         phone = '91' + phone; // normalize Indian numbers
       }
 

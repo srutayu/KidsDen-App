@@ -62,6 +62,7 @@ services:
     volumes:
       # Mount logs directory for debugging
       - ./logs:/app/logs
+      - ./whatsapp-session:/app/whatsapp-session
     networks:
       - kidsden-network
     restart: unless-stopped

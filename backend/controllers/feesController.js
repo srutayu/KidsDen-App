@@ -60,9 +60,8 @@ exports.getFees = async (req, res) => {
 
     // 2️⃣ Return the fee details directly from Class schema
     res.json({
-      // name: classData.name,
-      // amount: classData.amount,
-      baseAmount: classData.baseAmount
+      name: classData.name,
+      amount: classData.amount,
     });
 
   } catch (error) {
@@ -84,41 +83,6 @@ exports.getClass = async (req, res) => {
   }
 }
 
-
-// exports.getStatusOfPayments = async (req, res) => {
-//   try {
-//     const { classId, year, month } = req.query;
-//     if (!classId || !year || !month) {
-//       return res.status(400).json({ error: 'classId, year and month are required' });
-//     }
-
-//     // Aggregate count of payment statuses
-//     const summary = await Payment.aggregate([
-//       { $match: { classId: classId, year: parseInt(year), month: month } },
-//       {
-//         $group: {
-//           _id: '$status',
-//           count: { $sum: 1 }
-//         }
-//       }
-//     ]);
-
-//     const statuses = ['paid', 'pending', 'unpaid'];
-//     const studentsByStatus = {};
-
-//     // Get students per status
-//     for (const status of statuses) {
-//       const payments = await Payment.find({ classId, year: parseInt(year), month, status }).lean();
-//       studentsByStatus[status] = payments.map(p => p.studentId);
-//     }
-
-//     res.json({ summary, studentsByStatus });
-
-//   } catch (error) {
-//     console.error(error);
-//     res.status(500).json({ message: 'Could not retrieve payment status summary' });
-//   }
-// };
 
 exports.getStatusOfPayments = async (req, res) => {
   try {

@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/userModel');
 const Class = require('../models/classModel');
 const Message = require('../models/messageModel');
+const chatVersion = require('../models/chatVersion');
 
 
 exports.authenticate = async (socket) => {
@@ -68,5 +69,13 @@ exports.saveMessageToDB = async ({classId, sender, content}) => {
         timestamp: new Date()
     });
     await message.save();
+     await chatVersion.findOneAndUpdate(
+      { classId },
+      {
+        $inc: { version: 1 },
+        $set: { lastMessageTimestamp: new Date() }
+      },
+      { upsert: true }
+    );
     return message;
 }

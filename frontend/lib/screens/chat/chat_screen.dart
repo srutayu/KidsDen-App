@@ -8,8 +8,10 @@ import 'package:frontend/screens/chat/image_viewer.dart';
 import 'package:frontend/screens/chat/media_gallery.dart';
 import 'package:frontend/screens/chat/pdf_viewer.dart';
 import 'package:frontend/screens/chat/videoPlayer.dart';
+import 'package:frontend/screens/widgets/measure_size.dart';
 import 'package:frontend/screens/widgets/toast_message.dart';
 import 'package:frontend/services/s3_services.dart';
+import 'package:hive_flutter/adapters.dart';
 import 'package:intl/intl.dart';
 import 'package:open_filex/open_filex.dart';
 import 'package:path_provider/path_provider.dart';
@@ -56,14 +58,18 @@ class _ChatScreenState extends State<ChatScreen> {
   bool isTyping = false;
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-
-  // Cache: userId -> userName
   Map<String, String> userNamesCache = {};
 
-  // Current logged-in userId
   late final currentUserId =
       Provider.of<UserProvider>(context, listen: false).user?.id;
   String? currentUserRole;
+
+  final ValueNotifier<String> floatingDate = ValueNotifier("");
+  final ValueNotifier<double> floatingDateOpacity = ValueNotifier(1.0);
+  final Map<int, double> _itemHeights = {};
+  int _topVisibleIndex = -1;
+
+
 
   @override
   void initState() {
@@ -72,18 +78,116 @@ class _ChatScreenState extends State<ChatScreen> {
     fetchOldMessages();
     initSocket();
     _scrollController.addListener(_handleScroll);
+    floatingDateOpacity.addListener(() {
+      if (_topVisibleIndex != -1 && mounted) setState(() {});
+    });
   }
 
+  
 void _handleScroll() {
   final pos = _scrollController.position;
-
-  // --- 3️⃣ Preload next and previous few images ---
   final double offset = pos.pixels;
-  final int approxIndex = (offset / 180).floor();
 
+  final int approxIndex = (offset / 180).floor();
   _precacheNextImages(approxIndex);
   _precachePreviousImages(approxIndex);
+  
+  // Find which date section we're in
+  double cumulativeHeight = 0;
+  int dateIndex = 0;
+  
+  for (int i = 0; i < messages.length; i++) {
+    final height = _itemHeights[i] ?? 180; 
+    cumulativeHeight += height;
+    
+    if (cumulativeHeight > offset) {
+      dateIndex = i;
+      break;
+    }
+  }
+  
+  // dateIndex is the message index (from the top) where cumulativeHeight
+  // first exceeds the scroll offset — that corresponds to the topmost
+  // visible message.
+  final int topIndex = dateIndex;
+  if (topIndex >= 0 && topIndex < messages.length) {
+    try {
+      final ts = messages[topIndex]['timestamp'];
+      if (ts != null) {
+        final dt = DateTime.parse(ts);
+        final label = _dateLabelFor(dt);
+
+        final itemHeight = _itemHeights[topIndex] ?? 180.0;
+
+        // Estimate separator height based on text scale so it adapts across
+        // devices / accessibility settings. Base estimate 32 px.
+        final double baseSeparatorHeight = 32.0;
+        final double separatorHeight = baseSeparatorHeight * MediaQuery.of(context).textScaleFactor;
+
+        // Top of separator = top of message - separatorHeight
+        final sepTop = (cumulativeHeight - itemHeight) - separatorHeight;
+        final sepDistanceFromTop = sepTop - offset;
+
+        // Threshold in pixels: when separator is within this many pixels from
+        // the top, hide the floating date. Use separatorHeight + margin.
+        final double hideThreshold = separatorHeight + 24.0;
+
+        floatingDate.value = label;
+        final bool separatorNearby = _shouldShowDateSeparator(topIndex) ||
+            (topIndex + 1 < messages.length && _shouldShowDateSeparator(topIndex + 1));
+
+        // Update cached top index so itemBuilder can hide the inline separator
+        // for the top visible item while floating date is visible.
+        if (_topVisibleIndex != topIndex && mounted) {
+          setState(() {
+            _topVisibleIndex = topIndex;
+          });
+        }
+
+        if (separatorNearby && sepDistanceFromTop <= hideThreshold) {
+          floatingDateOpacity.value = 0.0;
+        } else {
+          floatingDateOpacity.value = 1.0;
+        }
+      }
+    } catch (e) {
+      // ignore parse errors
+    }
+  }
 }
+
+String _dateLabelFor(DateTime dt) {
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+  final msgDate = DateTime(dt.year, dt.month, dt.day);
+
+  if (msgDate == today) return 'Today';
+  if (msgDate == today.subtract(Duration(days: 1))) return 'Yesterday';
+  return DateFormat('dd MMM yyyy').format(msgDate);
+}
+
+bool _shouldShowDateSeparator(int index) {
+  if (messages.isEmpty) return false;
+  if (index < 0 || index >= messages.length) return false;
+  try {
+    final currentTs = messages[index]['timestamp'];
+    if (currentTs == null) return false;
+    final cur = DateTime.parse(currentTs);
+    final curDate = DateTime(cur.year, cur.month, cur.day);
+
+    if (index == 0) return true;
+
+    final prevTs = messages[index - 1]['timestamp'];
+    if (prevTs == null) return true;
+    final prev = DateTime.parse(prevTs);
+    final prevDate = DateTime(prev.year, prev.month, prev.day);
+
+    return curDate != prevDate;
+  } catch (e) {
+    return false;
+  }
+}
+
 
 
 void _precacheNextImages(int currentIndex) async {
@@ -277,30 +381,183 @@ void _showMessageMenu(BuildContext context, Map<dynamic, dynamic> msg, bool isMe
   }
 
   Future<void> fetchOldMessages() async {
-    try {
-      final res = await http.get(
-        Uri.parse(
-            '${URL.chatURL}/classes/get-messages?classId=${widget.classId}'),
-        headers: {'Authorization': 'Bearer ${widget.authToken}'},
-      );
+  // --- Open meta box ---
+  final metaBox = await Hive.openBox('chat_sync_meta_${widget.classId}');
+  int localVersion = metaBox.get('chatVersion', defaultValue: 0);
+  int localLastFetchedAt = metaBox.get('lastFetchedAt', defaultValue: 0);
 
-      if (res.statusCode == 200) {
-        final data = json.decode(res.body);
-        // If widget is already disposed, avoid calling setState
-        if (!mounted) {
-          messages = data;
-          return;
-        }
-        setState(() {
-          messages = data;
-        });
-        print(
-            'Fetched ${messages.length} messages for class ${widget.classId}');
-      }
-    } catch (e) {
-      print('Error fetching old messages: $e');
+  // --- Fetch server metadata ---
+  final metaRes = await http.get(
+    Uri.parse('${URL.chatURL}/classes/chat-metadata?classId=${widget.classId}'),
+    headers: {'Authorization': 'Bearer ${widget.authToken}'},
+  );
+
+  if (metaRes.statusCode != 200) {
+    print("❌ Failed to fetch metadata. Defaulting to full fetch.");
+  }
+
+  final metaData = json.decode(metaRes.body);
+  int serverVersion = metaData['version'];
+
+  String serverTsString = metaData['lastMessageTimestamp'];
+  int serverTs = 0;
+
+  serverTs = DateTime.parse(serverTsString).millisecondsSinceEpoch;
+
+  // --- Decide full or incremental fetch ---
+  bool shouldDoFullFetch = false;
+
+  if (serverVersion > localVersion) {
+    print("🔁 Server chat version increased → FULL FETCH");
+    shouldDoFullFetch = true;
+  } else if (serverTs > localLastFetchedAt) {
+    print("➕ New messages since lastFetchedAt → INCREMENTAL FETCH");
+    shouldDoFullFetch = false;
+  } else {
+    print("✔ Hive is fully up to date → NO FETCH NEEDED");
+    return;
+  }
+
+  // --- Open messages box ---
+  final box = await Hive.openBox<dynamic>('chat_${widget.classId}');
+
+//  full fetch
+  if (shouldDoFullFetch) {
+    final res = await http.get(
+      Uri.parse('${URL.chatURL}/classes/get-messages?classId=${widget.classId}'),
+      headers: {'Authorization': 'Bearer ${widget.authToken}'},
+    );
+
+    if (res.statusCode != 200) {
+      return;
+    }
+
+    final data = json.decode(res.body);
+
+    // Clear old & insert new
+    await box.clear();
+    await box.addAll(data);
+
+    // Update UI
+    if (mounted) {
+      setState(() => messages = box.values.toList());
+    } else {
+      messages = box.values.toList();
+    }
+
+    // Sort
+    try {
+      messages.sort((a, b) =>
+          DateTime.parse(a['timestamp']).compareTo(DateTime.parse(b['timestamp'])));
+    } catch (_) {}
+
+    // Update metadata
+    if (messages.isNotEmpty) {
+      final lastMillis =
+          DateTime.parse(messages.last['timestamp']).millisecondsSinceEpoch;
+
+      await metaBox.put('chatVersion', serverVersion);
+      await metaBox.put('lastFetchedAt', lastMillis);
+    }
+
+    print("✅ FULL FETCH complete.");
+    return;
+  }
+
+// incremental fetch
+
+  String afterIso = DateTime.fromMillisecondsSinceEpoch(localLastFetchedAt)
+      .toUtc()
+      .toIso8601String();
+  
+
+  final incRes = await http.get(
+    Uri.parse(
+        '${URL.chatURL}/classes/get-messages?classId=${widget.classId}&after=$afterIso'),
+    headers: {'Authorization': 'Bearer ${widget.authToken}'},
+  );
+
+  if (incRes.statusCode != 200) {
+    return;
+  }
+
+  final incData = json.decode(incRes.body);
+
+ if (incData is! List || incData.isEmpty) {
+  // Load existing Hive messages into UI
+  if (mounted) {
+    setState(() {
+      messages = box.values.toList();
+    });
+  } else {
+    messages = box.values.toList();
+  }
+
+  return;
+}
+
+  // Build duplicate check set
+  final existingIds = <String>{};
+  for (final item in box.values) {
+    try {
+      final id =
+          (item['id'] ?? item['_id'] ?? item['messageId'])?.toString();
+      if (id != null) existingIds.add(id);
+    } catch (_) {}
+  }
+
+  int newestMillis = localLastFetchedAt;
+
+  // Helper to get id
+  String? extractId(dynamic m) {
+    try {
+      return (m['id'] ?? m['_id'] ?? m['messageId'])?.toString();
+    } catch (_) {
+      return null;
     }
   }
+
+  int addedCount = 0;
+
+  for (final msg in incData) {
+    final msgId = extractId(msg);
+
+    // skip duplicates
+    if (msgId != null && existingIds.contains(msgId)) continue;
+
+    // Write to Hive
+    await box.add(msg);
+    addedCount++;
+
+    // track newest timestamp
+    try {
+      final ts = msg['timestamp'];
+      if (ts != null) {
+        final millis = DateTime.parse(ts).millisecondsSinceEpoch;
+        if (millis > newestMillis) newestMillis = millis;
+      }
+    } catch (_) {}
+  }
+
+  // Reload UI
+  if (mounted) {
+    setState(() => messages = box.values.toList());
+  } else {
+    messages = box.values.toList();
+  }
+
+  // Sort
+  try {
+    messages.sort((a, b) =>
+        DateTime.parse(a['timestamp']).compareTo(DateTime.parse(b['timestamp'])));
+  } catch (_) {}
+
+  // Update metadata
+  await metaBox.put('lastFetchedAt', newestMillis);
+
+  print("✅ Incremental fetch complete. Added $addedCount messages.");
+}
+
 
   void initSocket() {
     socket = IO.io(URL.socketURL, <String, dynamic>{
@@ -1177,6 +1434,8 @@ Widget _buildFilePreview(Map parsed, String messageId, String sender) {
   void dispose() {
     socket.dispose();
     _controller.dispose();
+    floatingDate.dispose();
+    floatingDateOpacity.dispose();
     super.dispose();
   }
 
@@ -1206,117 +1465,211 @@ Widget _buildFilePreview(Map parsed, String messageId, String sender) {
               fit: BoxFit.cover,
             ),
           ),
-          SafeArea(
-            child: Column(
-              children: [
-                Expanded(
-                  child: ListView.builder(
-                    controller: _scrollController,
-                    reverse: true,
-                    itemCount: messages.length,
-                    itemBuilder: (_, i) =>
-                        buildMessage(messages[messages.length - 1 - i]),
-                  ),
-                ),
-                if (isTyping)
-                  Padding(
-                    padding: EdgeInsets.all(8),
-                    child: Text('Someone is typing...',
-                        style: TextStyle(fontStyle: FontStyle.italic)),
-                  ),
-                if (currentUserRole != 'student')
-                  Padding(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: Colors.black54,
-                        border: Border.all(
-                          color: Colors.grey, // border color
-                          width: 1.5, // border thickness
+         SafeArea(
+ child: Stack(
+  children: [
+    Column(
+      children: [
+        Expanded(
+          child: ListView.builder(
+            controller: _scrollController,
+            reverse: true,
+            itemCount: messages.length,
+            itemBuilder: (_, i) {
+              final actualIndex = messages.length - 1 - i;
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (_shouldShowDateSeparator(actualIndex))
+                    // Hide inline separator for the top visible message when
+                    // the floating date is visible to avoid showing two labels
+                    // at once.
+                    if (!(actualIndex == _topVisibleIndex && floatingDateOpacity.value > 0.1))
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8.0),
+                      child: Center(
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context).brightness == Brightness.dark
+                                ? Colors.black.withOpacity(0.6)
+                                : Colors.white.withOpacity(0.9),
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.06),
+                                blurRadius: 4,
+                              )
+                            ],
+                          ),
+                          child: Text(
+                            _dateLabelFor(DateTime.parse(messages[actualIndex]['timestamp'])),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Theme.of(context).brightness == Brightness.dark
+                                  ? Colors.white
+                                  : Colors.black87,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
                         ),
-                        borderRadius: BorderRadius.circular(29),
                       ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          // ✅ Text input area with internal scroll
-                          Expanded(
-                            child: Container(
-                              constraints: const BoxConstraints(
-                                maxHeight:
-                                    150, // limit height before scroll activates
-                              ),
-                              margin: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(29),
-                              ),
-                              child: Scrollbar(
-                                thumbVisibility:
-                                    false, // set true if you want a visible scrollbar
-                                child: SingleChildScrollView(
-                                  reverse:
-                                      true, // keeps cursor at bottom when typing long text
-                                  child: TextField(
-                                    controller: _controller,
-                                    keyboardType: TextInputType.multiline,
-                                    maxLines: null,
-                                    onChanged: (val) =>
-                                        sendTyping(val.isNotEmpty),
-                                    style: const TextStyle(color: Colors.black),
-                                    decoration: const InputDecoration(
-                                      hintText: 'Type a message',
-                                      hintStyle:
-                                          TextStyle(color: Colors.black54),
-                                      border: InputBorder
-                                          .none, // remove default border
-                                      contentPadding: EdgeInsets.symmetric(
-                                          horizontal: 16, vertical: 12),
-                                    ),
-                                  ),
+                    ),
+                  MeasureSize(
+                    onChange: (size) {
+                      if (_itemHeights[actualIndex] != size.height) {
+                        _itemHeights[actualIndex] = size.height;
+                      }
+                    },
+                    child: buildMessage(messages[actualIndex]),
+                  ),
+                ],
+              );
+            })),
+
+          if (isTyping)
+            Padding(
+              padding: EdgeInsets.all(8),
+              child: Text(
+                'Someone is typing...',
+                style: TextStyle(fontStyle: FontStyle.italic),
+              ),
+            ),
+
+          if (currentUserRole != 'student')
+            Padding(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  border: Border.all(
+                    color: Colors.grey,
+                    width: 1.5,
+                  ),
+                  borderRadius: BorderRadius.circular(29),
+                ),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    // Text input area
+                    Expanded(
+                      child: Container(
+                        constraints: const BoxConstraints(
+                          maxHeight: 150,
+                        ),
+                        margin: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(29),
+                        ),
+                        child: Scrollbar(
+                          thumbVisibility: false,
+                          child: SingleChildScrollView(
+                            reverse: true,
+                            child: TextField(
+                              controller: _controller,
+                              keyboardType: TextInputType.multiline,
+                              maxLines: null,
+                              onChanged: (val) =>
+                                  sendTyping(val.isNotEmpty),
+                              style: const TextStyle(color: Colors.black),
+                              decoration: const InputDecoration(
+                                hintText: 'Type a message',
+                                hintStyle:
+                                    TextStyle(color: Colors.black54),
+                                border: InputBorder.none,
+                                contentPadding: EdgeInsets.symmetric(
+                                  horizontal: 16,
+                                  vertical: 12,
                                 ),
                               ),
                             ),
                           ),
-
-                          // ✅ Action icons (attach + send)
-                          Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              IconButton(
-                                icon: const Icon(Icons.attach_file),
-                                color: Colors.white,
-                                onPressed: uploadFile,
-                              ),
-                              IconButton(
-                                icon: const Icon(Icons.send),
-                                color: Colors.white,
-                                onPressed: () {
-                                  final text = _controller.text.trim();
-                                  if (text.isNotEmpty) sendMessage(text);
-                                },
-                              ),
-                            ],
-                          ),
-                        ],
+                        ),
                       ),
                     ),
-                  )
-                else
-                  Padding(
-                    padding: const EdgeInsets.all(16),
-                    child: Text(
-                      'You do not have permission to send messages.',
-                      style: TextStyle(color: Colors.black),
+
+                    // Icons
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.attach_file),
+                          color: Colors.white,
+                          onPressed: uploadFile,
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.send),
+                          color: Colors.white,
+                          onPressed: () {
+                            final text = _controller.text.trim();
+                            if (text.isNotEmpty) sendMessage(text);
+                          },
+                        ),
+                      ],
                     ),
-                  ),
-              ],
+                  ],
+                ),
+              ),
+            )
+          else
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Text(
+                'You do not have permission to send messages.',
+                style: TextStyle(color: Colors.black),
+              ),
             ),
-          ),
+        ],
+      ),
+
+      //Floating Date Header 
+      // Positioned(
+      //   top: MediaQuery.of(context).padding.top + 12,
+      //   left: 0,
+      //   right: 0,
+      //   child: ValueListenableBuilder<double>(
+      //     valueListenable: floatingDateOpacity,
+      //     builder: (_, opacity, __) {
+      //       return AnimatedOpacity(
+      //         duration: const Duration(milliseconds: 220),
+      //         opacity: opacity,
+      //         curve: Curves.easeInOut,
+      //         child: ValueListenableBuilder(
+      //           valueListenable: floatingDate,
+      //           builder: (_, value, __) {
+      //             if (value.isEmpty) return SizedBox.shrink();
+
+      //             return Center(
+      //               child: Container(
+      //                 padding:
+      //                     const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      //                 decoration: BoxDecoration(
+      //                   color: Colors.black.withOpacity(0.6),
+      //                   borderRadius: BorderRadius.circular(12),
+      //                 ),
+      //                 child: Text(
+      //                   value,
+      //                   style: const TextStyle(
+      //                     color: Colors.white,
+      //                     fontSize: 12,
+      //                   ),
+      //                 ),
+      //               ),
+      //             );
+      //           },
+      //         ),
+      //       );
+      //     },
+      //   ),
+      // ),
+    ],
+  ),
+)
+
           ]
         ),
       );
 }
-

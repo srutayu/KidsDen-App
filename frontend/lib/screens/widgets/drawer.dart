@@ -47,6 +47,7 @@ class _MyDrawerState extends State<MyDrawer> {
     }
     try {
       final value = await AuthController.logout(token!);
+      context.read<UserProvider>().clearUser();
       if (value) {
         await storage.deleteAll();
         Navigator.pushReplacement(

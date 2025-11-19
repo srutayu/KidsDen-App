@@ -1,6 +1,6 @@
 const express = require('express');
 const upload = require('../middleware/uploadMiddleware');
-const { getClassesForUser, getAllClasses, getUserDetails, getMessages, getUserNameById, getUserRoleById, broadcastMessage, uploadFile, deleteMessage } = require('../controllers/classController');
+const { getClassesForUser, getAllClasses, getUserDetails, getMessages, getUserNameById, getUserRoleById, broadcastMessage, uploadFile, deleteMessage, getChatMetadata } = require('../controllers/classController');
 const {protect} = require('../middleware/authMiddleware');
 const {authorize} = require('../middleware/roleMiddleware');
 
@@ -16,6 +16,7 @@ router.get('/get-messages', getMessages);
 router.get('/get-user-name', getUserNameById);
 router.get('/get-user-role', getUserRoleById);
 router.get('/presign-get', require('../controllers/classController').presignGet);
+router.get('/chat-metadata', getChatMetadata);
 
 
 router.post('/broadcast-message', broadcastMessage);

@@ -45,6 +45,7 @@ class _TeacherDrawerState extends State<TeacherDrawer> {
       return;
     }
     try {
+      context.read<UserProvider>().clearUser();
       final value = await AuthController.logout(token!);
       if (value) {
         await storage.deleteAll();

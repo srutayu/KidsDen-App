@@ -5,7 +5,6 @@ import 'package:frontend/controllers/payment_controller.dart';
 import 'package:frontend/controllers/razorpay_controller.dart';
 import 'package:frontend/models/payment_model.dart';
 import 'package:frontend/provider/user_data_provider.dart';
-import 'package:frontend/services/fees_service.dart';
 import 'package:provider/provider.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 
@@ -62,7 +61,7 @@ class _PaymentPageState extends State<PaymentPage> {
 }
 
   Future<void> fetchFeesData() async {
-    final fetchedFee = await FeesService.fetchAmountByClass(
+    final fetchedFee = await GetFeesController.getFees(
         userData!.assignedClasses[0], token);
 
     if (mounted) {
@@ -263,6 +262,7 @@ class _PaymentPageState extends State<PaymentPage> {
           });
 
           try {
+            print(feeAmount); 
             await openCheckout(
               month: fee["month"],
               year: now.year,
