@@ -6,14 +6,15 @@ import 'dart:convert';
 class ClassroomController {
   static final _baseURL = URL.baseURL;
 
-  Future<bool> createClass(name, createdBy, token) async {
+  Future<bool> createClass(name, createdBy, token, fees) async {
     final url = Uri.parse('$_baseURL/class/create-class');
     final response = await http.post(url, headers: {
       'Content-Type':'application/json',
       'Authorization': 'Bearer $token'
     }, body: jsonEncode({
       "name": name,
-      "createdBy": createdBy
+      "createdBy": createdBy,
+      "fees": fees
     })
     );
 

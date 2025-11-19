@@ -1,5 +1,4 @@
 const Class = require('../models/classModel');
-const Fees = require('../models/feesModel');
 const User = require('../models/userModel');
 
 // Chat DB connection and Message model setup
@@ -15,7 +14,7 @@ const StudentAttendance = require('../models/studentAttendanceModel');
 
 exports.createClass = async (req, res) => {
     try {
-        const {name, createdBy} = req.body;
+        const {name, createdBy, fees} = req.body;
         if(!name || !createdBy) {
             return res.status(400).json({ message: 'Please provide all required fields' });
         }
@@ -34,14 +33,15 @@ exports.createClass = async (req, res) => {
             name,
             createdBy: createdBy,
             teacherIds: adminUserIds,
-            studentIds: []
+            studentIds: [],
+            amount: fees,
+            baseAmount: fees,
         });
 
         await newClass.save();
-        await Fees.create({ classId: newClass.name, amount: 0, baseAmount: 0 });
         await User.updateMany(
             { _id: { $in: adminUserIds } },
-            { $addToSet: { assignedClasses: newClass.name } }
+            { $addToSet: { assignedClasses: newClass._id } }
         );
 
         res.status(201).json({ message: 'Class created successfully'});
@@ -82,7 +82,7 @@ exports.addTeachersToClass = async (req, res) => {
         // Add class name to assignedClasses for each teacher
         await User.updateMany(
             { _id: { $in: validTeacherIds } },
-            { $addToSet: { assignedClasses: classObj.name } }
+            { $addToSet: { assignedClasses: classObj._id } }
         );
         res.status(200).json({ message: 'Teachers added to class'});
         // res.json({ message: 'Teachers added to class', class: classObj });
@@ -123,7 +123,7 @@ exports.addStudentsToClass = async (req, res) => {
         // Add class name to assignedClasses for each student
         await User.updateMany(
             { _id: { $in: validStudentIds } },
-            { $addToSet: { assignedClasses: classObj.name } }
+            { $addToSet: { assignedClasses: classObj._id } }
         );
         res.status(200).json({ message: 'Students added to class'});
         // res.json({ message: 'Students added to class', class: classObj });
@@ -159,7 +159,6 @@ exports.deleteClass = async (req, res) => {
 
         await Promise.all([
             Class.findByIdAndDelete(classId),
-            Fees.findOneAndDelete({ classId: classObj.name }),
             User.updateMany(
                 { assignedClasses: classObj.name },
                 { $pull: { assignedClasses: classObj.name } }
@@ -357,7 +356,7 @@ exports.getClassesForTeacher = async (req, res) => {
         }
 
         // assignedClasses contains class names, so fetch class objects by name
-        const classes = await Class.find({ name: { $in: teacher.assignedClasses || [] } }).select('_id name');
+        const classes = await Class.find({ _id: { $in: teacher.assignedClasses || [] } }).select('_id name');
         // Map to array of { _id, name }
         const classList = classes.map(cls => ({ _id: cls._id, name: cls.name }));
         res.json({ classes: classList });

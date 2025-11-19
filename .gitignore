@@ -20,4 +20,5 @@ frontend/lib/constants/url.dart
 /app/logs/
 /backend/logs/
 /chatbackend/logs/
-
+/backend/whatsapp-session/
+/backend/.wwebjs_cache/

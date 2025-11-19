@@ -53,7 +53,7 @@ Future<void> _initializeData() async {
   } catch (e) {
     if (mounted) {
       setState(() => _loading = false);
-      _showError('Failed to load classes: $e');
+      showToast('Failed to load classes: $e');
     }
   }
 }
@@ -73,14 +73,9 @@ Future<void> _initializeData() async {
       });
     } catch (e) {
       setState(() => _loading = false);
-      _showError('Failed to load class members: $e');
+      showToast('Failed to load class members: $e');
     }
   }
-
-  void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
-  }
-
   
   Future<void> _addStudent(ClassroomModel student) async {
     if (_selectedClass == null) return;
@@ -90,7 +85,7 @@ Future<void> _initializeData() async {
       await _loadClassMembers(_selectedClass!.id);
       showToast('${student.name} added to ${_selectedClass?.name}');
     } catch (e) {
-      _showError('Failed to add student: $e');
+      showToast('Failed to add student: $e');
     } finally {
       setState(() => _loading = false);
     }
@@ -128,7 +123,7 @@ Future<void> _initializeData() async {
     await _loadClassMembers(_selectedClass!.id);
     showToast('${student.name} deleted from ${_selectedClass?.name}');
   } catch (e) {
-    _showError('Failed to remove student: $e');
+    showToast('Failed to remove student: $e');
   } finally {
     setState(() => _loading = false);
   }

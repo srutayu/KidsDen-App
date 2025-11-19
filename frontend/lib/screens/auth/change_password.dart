@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:fluttertoast/fluttertoast.dart';
 import 'package:frontend/controllers/auth_controller.dart';
+import 'package:frontend/screens/widgets/toast_message.dart';
 
 class ChangePasswordPage extends StatefulWidget {
   const ChangePasswordPage({super.key});
@@ -26,7 +26,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
   // String _message = '';
 
   void _showMessage(String msg) {
-    Fluttertoast.showToast(msg: msg);
+    showToast(msg);
   }
 
   @override

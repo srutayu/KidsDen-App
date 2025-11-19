@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:frontend/controllers/auth_controller.dart';
-import 'package:frontend/provider/auth_provider.dart';
 import 'package:frontend/provider/user_data_provider.dart';
 import 'package:frontend/screens/admin/attendance_views/admin_attendance.dart';
 import 'package:frontend/screens/admin/update/broadcast/broadcast_screen.dart';
@@ -17,16 +16,40 @@ class MyDrawer extends StatefulWidget {
 }
 
 class _MyDrawerState extends State<MyDrawer> {
-  final storage= FlutterSecureStorage();
-  late final token = Provider.of<AuthProvider>(context, listen: false).token!;
-  late final userId = Provider.of<UserProvider>(context, listen: false).user!.id;
-  late final userRole =  Provider.of<UserProvider>(context, listen: false).user!.role;
+  final storage = FlutterSecureStorage();
+  late String userId;
+  late String userRole;
+  String? _token;
+  String? get token => _token;
+  Future<void> getData() async {
+    _token = await storage.read(key: 'token');
+    userId = Provider.of<UserProvider>(context, listen: false).user!.id;
+    userRole = Provider.of<UserProvider>(context, listen: false).user!.role;
+  }
+
+
+    @override
+  void initState() {
+    super.initState();
+    getData();
+  }
 
   Future<void> _handleLogout() async {
-    try {
+  if (token == null) {
       await storage.deleteAll();
-      final value = await AuthController.logout(token);
+      if (context.mounted) {
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const OnboardingPage()),
+        );
+      }
+      return;
+    }
+    try {
+      final value = await AuthController.logout(token!);
+      context.read<UserProvider>().clearUser();
       if (value) {
+        await storage.deleteAll();
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -79,10 +102,11 @@ class _MyDrawerState extends State<MyDrawer> {
             leading: const Icon(Icons.article),
             title: const Text('Broadcast'),
             onTap: () {
+              print(token);
               Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (context) => BroadcastScreen(authToken: token,userId: userId, userRole: userRole,),
+                  builder: (context) => BroadcastScreen(authToken: token!,userId: userId, userRole: userRole,),
                 ),
               );
             },

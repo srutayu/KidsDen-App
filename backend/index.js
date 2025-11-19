@@ -4,20 +4,6 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 
-// Add ISO timestamps to all console output for better log tracing
-
-// if (!global.__console_timestamps_patched) {
-//   const methods = ['log', 'info', 'warn', 'error', 'debug'];
-//   methods.forEach((m) => {
-//     const orig = console[m] ? console[m].bind(console) : null;
-//     if (!orig) return;
-//     console[m] = (...args) => {
-//       const ts = new Date().toISOString();
-//       orig(`[${ts}]`, ...args);
-//     };
-//   });
-//   global.__console_timestamps_patched = true;
-// }
 
 const connectDB = require('./config/db');
 const errorHandler = require('./middleware/errorHandler');

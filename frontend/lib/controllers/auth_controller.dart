@@ -90,7 +90,7 @@ class AuthController {
     });
     // print(token);
     Map<String, dynamic> jsonMap = json.decode(response.body);
-    if(response.statusCode == 200){
+    if(response.statusCode == 200 || response.statusCode == 400){
       return true;
     } else {
       print("Logout Error: ${jsonMap['message']}");
@@ -153,6 +153,27 @@ class AuthController {
     }
     else {
       throw Exception("Failed to fetch login date");
+    }
+  }
+
+  static Future<String> getNamefromID(String token, String id) async {
+    final url = Uri.parse('${URL.chatURL}/classes/get-user-name?userId=$id');
+
+    final response = await http.get(
+      url,
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer $token', 
+      },
+    );
+
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      final name = (data['name']);
+      return name;
+    }
+    else {
+      throw Exception("Failed to fetch Name from $id");
     }
   }
 

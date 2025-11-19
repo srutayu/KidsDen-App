@@ -3,6 +3,9 @@ const Class = require('../models/classModel');
 const Message = require('../models/messageModel');
 const { uploadBufferToS3, generateKey, getPresignedPutAndGetUrls, getPresignedGetUrl } = require('../utils/s3');
 const { pub } = require('../config/redisClient');
+const chatVersion = require('../models/chatVersion');
+const mongoose = require('mongoose');
+
 
 exports.getClassesForUser = async (req, res) => {
     try {
@@ -10,13 +13,12 @@ exports.getClassesForUser = async (req, res) => {
         if(!userId){
             return res.status(401).json({message: 'Unauthorized'});
         }
-        // console.log("userId:", userId);
         const user = await User.findById(userId);
         if (!user) {
             throw new Error('User not found');
         }
         // assignedClasses is an array of class names
-        const classes = await Class.find({ name: { $in: user.assignedClasses } });
+        const classes = await Class.find({ _id: { $in: user.assignedClasses } });
         const result = classes.map(cls => ({
             classId: cls._id,
             className: cls.name
@@ -65,47 +67,80 @@ exports.getUserDetails = async (req, res) => {
 // getMessages by classId
 
 exports.getMessages = async (req, res) => {
-    try {
-        const { classId } = req.query;
-        if(!classId){
-            return res.status(400).json({message: 'classId is required'});
-        }
+  try {
+    const { classId, after } = req.query;
 
-        const message = await Message.find({ classId }).select('-__v').sort({ timestamp: 1 });
-
-        if(!message){
-            return res.status(404).json({message: 'No messages found for this class'});
-        }
-        // If S3 presign is enabled, rewrite file message URLs to presigned GET URLs
-        if (process.env.S3_PRESIGN === 'true') {
-            const { getPresignedGetUrl } = require('../utils/s3');
-            const rewritten = await Promise.all(message.map(async (msg) => {
-                let content = msg.content;
-                try {
-                    const parsed = JSON.parse(content);
-                    if (parsed && parsed.type === 'file' && parsed.key) {
-                        try {
-                            const url = await getPresignedGetUrl(parsed.key);
-                            parsed.url = url;
-                            content = JSON.stringify(parsed);
-                        } catch (e) {
-                            console.warn('Failed to presign GET for message:', msg._id, e && (e.message || e));
-                        }
-                    }
-                } catch (e) {
-                    // ignore non-json
-                }
-                return { ...msg.toObject(), content };
-            }));
-            return res.status(200).json(rewritten);
-        }
-        return res.status(200).json(message);
-    } catch(err) {
-        console.error('Error fetching messages:', err);
-        return res.status(500).json({message: 'Server error'});
+    if (!classId) {
+      return res.status(400).json({ message: 'classId is required' });
     }
 
-}
+    let classObjectId;
+    try {
+      classObjectId = new mongoose.Types.ObjectId(classId);
+    } catch (err) {
+      return res.status(400).json({ message: 'Invalid classId' });
+    }
+
+
+    
+
+    // Build query filter
+    const filter = { classId: classObjectId };
+
+    // If 'after' is provided → incremental fetch
+    if (after) {
+      filter.timestamp = { $gt: new Date(after) };
+    }
+
+    // Fetch messages
+    const messages = await Message
+      .find(filter)
+      .select('-__v')
+      .sort({ timestamp: 1 });
+
+    if (!messages) {
+      return res.status(404).json({ message: 'No messages found for this class' });
+    }
+
+    // 🟦 If S3 presigning is enabled
+    if (process.env.S3_PRESIGN === 'true') {
+      const { getPresignedGetUrl } = require('../utils/s3');
+
+      const rewritten = await Promise.all(
+        messages.map(async (msg) => {
+          let content = msg.content;
+
+          try {
+            const parsed = JSON.parse(content);
+            if (parsed && parsed.type === 'file' && parsed.key) {
+              try {
+                const url = await getPresignedGetUrl(parsed.key);
+                parsed.url = url;
+                content = JSON.stringify(parsed);
+              } catch (e) {
+                console.warn('Failed to presign GET for message:', msg._id, e && (e.message || e));
+              }
+            }
+          } catch (e) {
+            // content not JSON → ignore
+          }
+
+          return { ...msg.toObject(), content };
+        })
+      );
+
+      return res.status(200).json(rewritten);
+    }
+
+    // Normal response
+    return res.status(200).json(messages);
+
+  } catch (err) {
+    console.error('Error fetching messages:', err);
+    return res.status(500).json({ message: 'Server error' });
+  }
+};
+
 
 
 // exports.getMessages = async (req, res) => {a
@@ -505,6 +540,10 @@ exports.deleteMessage = async (req, res) => {
 
         // remove from DB
         await Message.findByIdAndDelete(messageId);
+        await chatVersion.findOneAndUpdate(
+            { classId: msg.classId },
+            { $inc: { version: 1 } }
+        );
 
         // notify others via redis
         const messageData = { _id: messageId, classId: msg.classId.toString(), deleted: true };
@@ -515,4 +554,19 @@ exports.deleteMessage = async (req, res) => {
         console.error('Error deleting message:', err);
         return res.status(500).json({ message: 'Server error' });
     }
+}
+
+exports.getChatMetadata = async (req, res) =>{
+  const { classId } = req.query;
+
+  try {
+    const meta = await chatVersion.findOne({ classId });
+
+    res.json({
+      version: meta?.version ?? 0,
+      lastMessageTimestamp: meta?.lastMessageTimestamp ?? null
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 }

@@ -119,7 +119,7 @@ async function initWhatsApp() {
 
   client = new Client({
     puppeteer: puppeteerOptions,
-    authStrategy: new LocalAuth({ dataPath: './.wwebjs_auth' }),
+    authStrategy: new LocalAuth({ dataPath: 'whatsapp-session' }),
   });
 
   client.on('qr', qr => {

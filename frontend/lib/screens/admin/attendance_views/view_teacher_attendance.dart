@@ -43,7 +43,7 @@ class _ViewTeacherAttendanceState extends State<ViewTeacherAttendance> {
       context: context,
       initialDate: selectedDate,
       firstDate: DateTime(2023),
-      lastDate: DateTime(2026),
+      lastDate: DateTime.now(),
     );
     if (picked != null) {
       setState(() => selectedDate = picked);
