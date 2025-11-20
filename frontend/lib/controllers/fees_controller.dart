@@ -30,7 +30,7 @@ class FeesController {
 
     if(response.statusCode == 200){
       Map<String, dynamic> jsonMap = jsonDecode(response.body);
-      int amount = jsonMap['baseAmount'];
+      int amount = jsonMap['amount'];
       return amount;
     } else {
       throw Exception("Failed to fetch amount from class");
