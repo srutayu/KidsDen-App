@@ -18,7 +18,9 @@ exports.getClassesForUser = async (req, res) => {
             throw new Error('User not found');
         }
         // assignedClasses is an array of class names
-        const classes = await Class.find({ _id: { $in: user.assignedClasses } });
+        const objectIds = user.assignedClasses.map(id => new mongoose.Types.ObjectId(id));
+
+        const classes = await Class.find({ _id: { $in: objectIds } });
         const result = classes.map(cls => ({
             classId: cls._id,
             className: cls.name

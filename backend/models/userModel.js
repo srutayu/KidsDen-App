@@ -29,7 +29,10 @@ const userSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
-    assignedClasses: [{type: String}],
+    assignedClasses: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Class',
+    }],
 }, { timestamps: true });
 
 userSchema.pre('save', async function(next) {
