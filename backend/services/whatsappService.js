@@ -92,7 +92,31 @@ async function initWhatsApp() {
   if (client) return client;
 
   // Build puppeteer options with a sensible executablePath if available.
-  const puppeteerOptions = { args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'] };
+  const puppeteerOptions = {
+    headless: true,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-accelerated-2d-canvas',
+      '--no-zygote',
+      '--single-process',
+      '--disable-gpu',
+      '--no-first-run',
+      '--no-default-browser-check',
+      '--disable-extensions',
+      '--disable-background-networking',
+      '--disable-background-timer-throttling',
+      '--disable-client-side-phishing-detection',
+      '--disable-hang-monitor',
+      '--disable-prompt-on-repost',
+      '--disable-sync',
+      '--metrics-recording-only',
+      '--mute-audio'
+    ],
+    defaultViewport: null,
+    ignoreHTTPSErrors: true
+  };
 
   let exePath = process.env.PUPPETEER_EXECUTABLE_PATH || process.env.CHROME_PATH || '';
   if (!exePath) {
@@ -103,7 +127,7 @@ async function initWhatsApp() {
       ];
       exePath = candidates.find(p => fs.existsSync(p));
     } else if (process.platform === 'linux') {
-      const candidates = ['/usr/bin/chromium-browser', '/usr/bin/chromium', '/usr/bin/google-chrome-stable', '/usr/bin/google-chrome'];
+      const candidates = ['/usr/bin/chromium-browser', '/usr/bin/chromium', '/usr/bin/chrome', '/usr/bin/google-chrome-stable', '/usr/bin/google-chrome'];
       exePath = candidates.find(p => fs.existsSync(p));
     } else if (process.platform === 'darwin') {
       const candidates = ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'];
@@ -180,50 +204,50 @@ async function initWhatsApp() {
     }
   } catch (e) {
     console.warn('[WhatsAppService] Failed to configure S3 store, continuing with local session storage', e && e.message ? e.message : e);
-    store = undefined;
-  }
+    try {
+      await client.initialize();
+      return client;
+    } catch (err) {
+      const msg = err && err.message ? err.message : String(err);
+      console.error('[WhatsAppService] Failed to initialize WhatsApp client (puppeteer/browser error):', msg);
 
-  // Determine session storage directory. Allow override via env var so
-  // the path can be changed in Docker or other deployments.
-  const defaultSessionDir = path.resolve(__dirname, '..', '..', 'whatsapp-session');
-  const sessionDir = process.env.WHATSAPP_SESSION_DIR || defaultSessionDir;
+      // If browser launch failed, attempt one retry with additional compatibility flags.
+      if (msg.includes('Failed to launch the browser process') || msg.includes('executablePath')) {
+        console.warn('[WhatsAppService] Browser launch failed — retrying once with additional compatibility flags');
+        try {
+          // Clean up previous client
+          if (client && typeof client.destroy === 'function') {
+            await client.destroy().catch(() => {});
+          }
+        } catch (e) { /* ignore */ }
+        client = null;
 
-  // Ensure the directory exists and is writable
-  try {
-    fs.mkdirSync(sessionDir, { recursive: true });
-  } catch (e) {
-    console.warn('[WhatsAppService] Could not create session directory', sessionDir, e && e.message ? e.message : e);
-  }
+        // Add extra flags and try again
+        puppeteerOptions.args = Array.from(new Set([...(puppeteerOptions.args || []), '--no-zygote', '--single-process', '--disable-dev-shm-usage', '--disable-gpu']));
+        // recreate client (reuse authStrategy variable if present)
+        try {
+          const retryClient = new Client({ puppeteer: puppeteerOptions, authStrategy });
+          await retryClient.initialize();
+          client = retryClient;
+          console.log('[WhatsAppService] Browser initialized on retry');
+          return client;
+        } catch (err2) {
+          console.error('[WhatsAppService] Retry to initialize browser also failed:', err2 && err2.message ? err2.message : err2);
+          try { if (client && typeof client.destroy === 'function') await client.destroy().catch(() => {}); } catch (e) {}
+          client = null;
+          return null;
+        }
+      }
 
-  console.log('[WhatsAppService] Using session directory:', sessionDir);
-
-  const remoteAuthOptions = {
-    clientId: 'AWS',
-    dataPath: sessionDir,
-    backupSyncIntervalMs: 600000
-  };
-  if (store) remoteAuthOptions.store = store;
-
-  let authStrategy;
-  if (store) {
-    authStrategy = new RemoteAuth(remoteAuthOptions);
-    console.log('[WhatsAppService] Using RemoteAuth (S3-backed)');
-  } else {
-    // Use LocalAuth when no remote store is configured. LocalAuth uses the
-    // local filesystem at `dataPath` to persist session data.
-    authStrategy = new LocalAuth({ dataPath: sessionDir });
-    console.log('[WhatsAppService] Using LocalAuth (local filesystem)');
-  }
-
-  client = new Client({
-    puppeteer: puppeteerOptions,
-    authStrategy
-  });
-
-
-  client.on('qr', qr => {
-    console.clear();
-    qrcode.generate(qr, { small: true });
+      // client.destroy() is async and may reject; await and catch so the rejection doesn't bubble out.
+      try {
+        if (client && typeof client.destroy === 'function') {
+          await client.destroy().catch(() => {});
+        }
+      } catch (e) { /* ignore */ }
+      client = null;
+      return null;
+    }
     console.log('📱 Scan this QR using WhatsApp → Linked Devices');
   });
 
