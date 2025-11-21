@@ -84,6 +84,7 @@
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const fs = require('fs');
+const path = require('path');
 
 let client = null;
 
@@ -91,7 +92,31 @@ async function initWhatsApp() {
   if (client) return client;
 
   // Build puppeteer options with a sensible executablePath if available.
-  const puppeteerOptions = { args: ['--no-sandbox', '--disable-setuid-sandbox', '--disable-dev-shm-usage'] };
+  const puppeteerOptions = {
+    headless: true,
+    args: [
+      '--no-sandbox',
+      '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-accelerated-2d-canvas',
+      '--no-zygote',
+      '--single-process',
+      '--disable-gpu',
+      '--no-first-run',
+      '--no-default-browser-check',
+      '--disable-extensions',
+      '--disable-background-networking',
+      '--disable-background-timer-throttling',
+      '--disable-client-side-phishing-detection',
+      '--disable-hang-monitor',
+      '--disable-prompt-on-repost',
+      '--disable-sync',
+      '--metrics-recording-only',
+      '--mute-audio'
+    ],
+    defaultViewport: null,
+    ignoreHTTPSErrors: true
+  };
 
   let exePath = process.env.PUPPETEER_EXECUTABLE_PATH || process.env.CHROME_PATH || '';
   if (!exePath) {
@@ -102,7 +127,7 @@ async function initWhatsApp() {
       ];
       exePath = candidates.find(p => fs.existsSync(p));
     } else if (process.platform === 'linux') {
-      const candidates = ['/usr/bin/chromium-browser', '/usr/bin/chromium', '/usr/bin/google-chrome-stable', '/usr/bin/google-chrome'];
+      const candidates = ['/usr/bin/chromium-browser', '/usr/bin/chromium', '/usr/bin/chrome', '/usr/bin/google-chrome-stable', '/usr/bin/google-chrome'];
       exePath = candidates.find(p => fs.existsSync(p));
     } else if (process.platform === 'darwin') {
       const candidates = ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'];
@@ -118,52 +143,111 @@ async function initWhatsApp() {
   }
 
   const { Client, RemoteAuth } = require('whatsapp-web.js');
-  const { AwsS3Store } = require('wwebjs-aws-s3');
-  const {
-    S3Client,
-    PutObjectCommand,
-    HeadObjectCommand,
-    GetObjectCommand,
-    DeleteObjectCommand
-  } = require('@aws-sdk/client-s3');
+  // Optionally configure AWS S3-backed remote store for session backups.
+  // If AWS_REGION or credentials are missing, fall back to local-only storage.
+  let store = undefined;
+  try {
+    const hasAwsRegion = !!process.env.AWS_REGION;
+    const hasAwsCreds = !!process.env.AWS_ACCESS_KEY_ID && !!process.env.AWS_SECRET_ACCESS_KEY;
+    if (hasAwsRegion && hasAwsCreds) {
+      const { AwsS3Store } = require('wwebjs-aws-s3');
+      const {
+        S3Client,
+        PutObjectCommand,
+        HeadObjectCommand,
+        GetObjectCommand,
+        DeleteObjectCommand
+      } = require('@aws-sdk/client-s3');
 
-  const s3 = new S3Client({
-    region: process.env.AWS_REGION,
-    credentials: {
-      accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+      const s3 = new S3Client({
+        region: process.env.AWS_REGION,
+        credentials: {
+          accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+        }
+      });
+
+      const putObjectCommand = PutObjectCommand;
+      const headObjectCommand = HeadObjectCommand;
+      const getObjectCommand = GetObjectCommand;
+      const deleteObjectCommand = DeleteObjectCommand;
+
+      store = new AwsS3Store({
+        bucketName: process.env.S3_BUCKET || 'kidsden-bucket',
+        remoteDataPath: process.env.S3_REMOTE_DATA_PATH || 'whatsapp/session',
+        s3Client: s3,
+        putObjectCommand,
+        headObjectCommand,
+        getObjectCommand,
+        deleteObjectCommand
+      });
+      console.log('[WhatsAppService] S3 store configured for remote session backups');
+
+      // Quick health-check: try to put a small object to the bucket/path to
+      // verify credentials, region and bucket permissions. This will surface
+      // issues early in logs if S3 writes are blocked or the bucket is missing.
+      (async () => {
+        try {
+          const bucket = process.env.S3_BUCKET || 'kidsden-bucket';
+          const remotePath = process.env.S3_REMOTE_DATA_PATH || 'whatsapp/session';
+          const key = `${remotePath.replace(/\/+$/,'')}/health-check-${Date.now()}.txt`;
+          const body = `health-check ${new Date().toISOString()}`;
+          await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: body }));
+          console.log('[WhatsAppService] S3 health-check upload succeeded:', bucket, key);
+        } catch (e) {
+          console.error('[WhatsAppService] S3 health-check upload failed:', e && e.message ? e.message : e);
+          console.error('[WhatsAppService] Ensure S3 bucket exists and IAM user has PutObject permission, and AWS_REGION is correct.');
+        }
+      })();
+    } else {
+      console.warn('[WhatsAppService] AWS_REGION or AWS credentials missing — using local session storage only');
     }
-  });
+  } catch (e) {
+    console.warn('[WhatsAppService] Failed to configure S3 store, continuing with local session storage', e && e.message ? e.message : e);
+    try {
+      await client.initialize();
+      return client;
+    } catch (err) {
+      const msg = err && err.message ? err.message : String(err);
+      console.error('[WhatsAppService] Failed to initialize WhatsApp client (puppeteer/browser error):', msg);
 
-  const putObjectCommand = PutObjectCommand;
-  const headObjectCommand = HeadObjectCommand;
-  const getObjectCommand = GetObjectCommand;
-  const deleteObjectCommand = DeleteObjectCommand;
+      // If browser launch failed, attempt one retry with additional compatibility flags.
+      if (msg.includes('Failed to launch the browser process') || msg.includes('executablePath')) {
+        console.warn('[WhatsAppService] Browser launch failed — retrying once with additional compatibility flags');
+        try {
+          // Clean up previous client
+          if (client && typeof client.destroy === 'function') {
+            await client.destroy().catch(() => {});
+          }
+        } catch (e) { /* ignore */ }
+        client = null;
 
-  const store = new AwsS3Store({
-    bucketName: 'kidsden-bucket',
-    remoteDataPath: 'whatsapp/session',
-    s3Client: s3,
-    putObjectCommand,
-    headObjectCommand,
-    getObjectCommand,
-    deleteObjectCommand
-  });
+        // Add extra flags and try again
+        puppeteerOptions.args = Array.from(new Set([...(puppeteerOptions.args || []), '--no-zygote', '--single-process', '--disable-dev-shm-usage', '--disable-gpu']));
+        // recreate client (reuse authStrategy variable if present)
+        try {
+          const retryClient = new Client({ puppeteer: puppeteerOptions, authStrategy });
+          await retryClient.initialize();
+          client = retryClient;
+          console.log('[WhatsAppService] Browser initialized on retry');
+          return client;
+        } catch (err2) {
+          console.error('[WhatsAppService] Retry to initialize browser also failed:', err2 && err2.message ? err2.message : err2);
+          try { if (client && typeof client.destroy === 'function') await client.destroy().catch(() => {}); } catch (e) {}
+          client = null;
+          return null;
+        }
+      }
 
-  client = new Client({
-    puppeteer: puppeteerOptions,
-    authStrategy: new RemoteAuth({
-      clientId: 'AWS',
-      dataPath: 'whatsapp-session',
-      store: store,
-      backupSyncIntervalMs: 600000
-    })
-  });
-
-
-  client.on('qr', qr => {
-    console.clear();
-    qrcode.generate(qr, { small: true });
+      // client.destroy() is async and may reject; await and catch so the rejection doesn't bubble out.
+      try {
+        if (client && typeof client.destroy === 'function') {
+          await client.destroy().catch(() => {});
+        }
+      } catch (e) { /* ignore */ }
+      client = null;
+      return null;
+    }
     console.log('📱 Scan this QR using WhatsApp → Linked Devices');
   });
 
