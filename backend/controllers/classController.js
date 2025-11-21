@@ -160,12 +160,12 @@ exports.deleteClass = async (req, res) => {
         await Promise.all([
             Class.findByIdAndDelete(classId),
             User.updateMany(
-                { assignedClasses: classObj.name },
-                { $pull: { assignedClasses: classObj.name } }
+                { assignedClasses: classId },
+                { $pull: { assignedClasses: classId } }
             ),
             StudentAttendance.deleteMany({ classId }),
             ChatMessage.deleteMany({ classId }),
-            Payment.deleteMany({ classId: classObj.name })
+            Payment.deleteMany({ classId })
         ]);
 
 
@@ -205,7 +205,7 @@ exports.deleteTeacherFromClass = async (req, res) => {
         // Remove class name from assignedClasses for the teacher
         await User.updateOne(
             { _id: teacherId },
-            { $pull: { assignedClasses: classObj.name } }
+            { $pull: { assignedClasses: classId } }
         );
         res.json({ message: 'Teacher removed from class', class: classObj });
 
@@ -233,7 +233,7 @@ exports.deleteStudentFromClass = async (req, res) => {
         // Remove class name from assignedClasses for the student
         await User.updateOne(
             { _id: studentId },
-            { $pull: { assignedClasses: classObj.name } }
+            { $pull: { assignedClasses: classId } }
         );
 
         res.json({ message: 'Student removed from class', class: classObj });
