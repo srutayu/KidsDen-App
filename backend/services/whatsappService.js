@@ -151,6 +151,7 @@ async function initWhatsApp() {
   });
 
   client = new Client({
+    puppeteer: puppeteerOptions,
     authStrategy: new RemoteAuth({
       clientId: 'AWS',
       dataPath: 'whatsapp-session',
