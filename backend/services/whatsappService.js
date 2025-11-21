@@ -117,10 +117,48 @@ async function initWhatsApp() {
     console.warn('[WhatsAppService] No browser executable found automatically. Set PUPPETEER_EXECUTABLE_PATH or CHROME_PATH env var, or install Chrome/Chromium in the container.');
   }
 
-  client = new Client({
-    puppeteer: puppeteerOptions,
-    authStrategy: new LocalAuth({ dataPath: 'whatsapp-session' }),
+  const { Client, RemoteAuth } = require('whatsapp-web.js');
+  const { AwsS3Store } = require('wwebjs-aws-s3');
+  const {
+    S3Client,
+    PutObjectCommand,
+    HeadObjectCommand,
+    GetObjectCommand,
+    DeleteObjectCommand
+  } = require('@aws-sdk/client-s3');
+
+  const s3 = new S3Client({
+    region: process.env.AWS_REGION,
+    credentials: {
+      accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    }
   });
+
+  const putObjectCommand = PutObjectCommand;
+  const headObjectCommand = HeadObjectCommand;
+  const getObjectCommand = GetObjectCommand;
+  const deleteObjectCommand = DeleteObjectCommand;
+
+  const store = new AwsS3Store({
+    bucketName: 'kidsden-bucket',
+    remoteDataPath: 'whatsapp/session',
+    s3Client: s3,
+    putObjectCommand,
+    headObjectCommand,
+    getObjectCommand,
+    deleteObjectCommand
+  });
+
+  client = new Client({
+    authStrategy: new RemoteAuth({
+      clientId: 'AWS',
+      dataPath: 'whatsapp-session',
+      store: store,
+      backupSyncIntervalMs: 600000
+    })
+  });
+
 
   client.on('qr', qr => {
     console.clear();
@@ -131,6 +169,11 @@ async function initWhatsApp() {
   client.on('ready', () => {
     console.log('✅ WhatsApp client ready');
   });
+
+  client.on('remote_session_saved', () => {
+    console.log('Session saved on S3');
+  });
+
 
   client.on('disconnected', reason => {
     console.log('⚠️ Client disconnected:', reason);

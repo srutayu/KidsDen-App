@@ -592,9 +592,6 @@ Widget build(BuildContext context) {
                   selectedClassName = value.name; // store name
                 });
 
-                print("Selected class ID: $selectedClassId");
-                print("Selected class Name: $selectedClassName");
-
                 fetchPaymentStatus();  // your function
               }
             },
