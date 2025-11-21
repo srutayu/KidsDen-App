@@ -84,6 +84,7 @@
 const { Client, LocalAuth, MessageMedia } = require('whatsapp-web.js');
 const qrcode = require('qrcode-terminal');
 const fs = require('fs');
+const path = require('path');
 
 let client = null;
 
@@ -118,46 +119,105 @@ async function initWhatsApp() {
   }
 
   const { Client, RemoteAuth } = require('whatsapp-web.js');
-  const { AwsS3Store } = require('wwebjs-aws-s3');
-  const {
-    S3Client,
-    PutObjectCommand,
-    HeadObjectCommand,
-    GetObjectCommand,
-    DeleteObjectCommand
-  } = require('@aws-sdk/client-s3');
+  // Optionally configure AWS S3-backed remote store for session backups.
+  // If AWS_REGION or credentials are missing, fall back to local-only storage.
+  let store = undefined;
+  try {
+    const hasAwsRegion = !!process.env.AWS_REGION;
+    const hasAwsCreds = !!process.env.AWS_ACCESS_KEY_ID && !!process.env.AWS_SECRET_ACCESS_KEY;
+    if (hasAwsRegion && hasAwsCreds) {
+      const { AwsS3Store } = require('wwebjs-aws-s3');
+      const {
+        S3Client,
+        PutObjectCommand,
+        HeadObjectCommand,
+        GetObjectCommand,
+        DeleteObjectCommand
+      } = require('@aws-sdk/client-s3');
 
-  const s3 = new S3Client({
-    region: process.env.AWS_REGION,
-    credentials: {
-      accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+      const s3 = new S3Client({
+        region: process.env.AWS_REGION,
+        credentials: {
+          accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+        }
+      });
+
+      const putObjectCommand = PutObjectCommand;
+      const headObjectCommand = HeadObjectCommand;
+      const getObjectCommand = GetObjectCommand;
+      const deleteObjectCommand = DeleteObjectCommand;
+
+      store = new AwsS3Store({
+        bucketName: process.env.S3_BUCKET || 'kidsden-bucket',
+        remoteDataPath: process.env.S3_REMOTE_DATA_PATH || 'whatsapp/session',
+        s3Client: s3,
+        putObjectCommand,
+        headObjectCommand,
+        getObjectCommand,
+        deleteObjectCommand
+      });
+      console.log('[WhatsAppService] S3 store configured for remote session backups');
+
+      // Quick health-check: try to put a small object to the bucket/path to
+      // verify credentials, region and bucket permissions. This will surface
+      // issues early in logs if S3 writes are blocked or the bucket is missing.
+      (async () => {
+        try {
+          const bucket = process.env.S3_BUCKET || 'kidsden-bucket';
+          const remotePath = process.env.S3_REMOTE_DATA_PATH || 'whatsapp/session';
+          const key = `${remotePath.replace(/\/+$/,'')}/health-check-${Date.now()}.txt`;
+          const body = `health-check ${new Date().toISOString()}`;
+          await s3.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: body }));
+          console.log('[WhatsAppService] S3 health-check upload succeeded:', bucket, key);
+        } catch (e) {
+          console.error('[WhatsAppService] S3 health-check upload failed:', e && e.message ? e.message : e);
+          console.error('[WhatsAppService] Ensure S3 bucket exists and IAM user has PutObject permission, and AWS_REGION is correct.');
+        }
+      })();
+    } else {
+      console.warn('[WhatsAppService] AWS_REGION or AWS credentials missing — using local session storage only');
     }
-  });
+  } catch (e) {
+    console.warn('[WhatsAppService] Failed to configure S3 store, continuing with local session storage', e && e.message ? e.message : e);
+    store = undefined;
+  }
 
-  const putObjectCommand = PutObjectCommand;
-  const headObjectCommand = HeadObjectCommand;
-  const getObjectCommand = GetObjectCommand;
-  const deleteObjectCommand = DeleteObjectCommand;
+  // Determine session storage directory. Allow override via env var so
+  // the path can be changed in Docker or other deployments.
+  const defaultSessionDir = path.resolve(__dirname, '..', '..', 'whatsapp-session');
+  const sessionDir = process.env.WHATSAPP_SESSION_DIR || defaultSessionDir;
 
-  const store = new AwsS3Store({
-    bucketName: 'kidsden-bucket',
-    remoteDataPath: 'whatsapp/session',
-    s3Client: s3,
-    putObjectCommand,
-    headObjectCommand,
-    getObjectCommand,
-    deleteObjectCommand
-  });
+  // Ensure the directory exists and is writable
+  try {
+    fs.mkdirSync(sessionDir, { recursive: true });
+  } catch (e) {
+    console.warn('[WhatsAppService] Could not create session directory', sessionDir, e && e.message ? e.message : e);
+  }
+
+  console.log('[WhatsAppService] Using session directory:', sessionDir);
+
+  const remoteAuthOptions = {
+    clientId: 'AWS',
+    dataPath: sessionDir,
+    backupSyncIntervalMs: 600000
+  };
+  if (store) remoteAuthOptions.store = store;
+
+  let authStrategy;
+  if (store) {
+    authStrategy = new RemoteAuth(remoteAuthOptions);
+    console.log('[WhatsAppService] Using RemoteAuth (S3-backed)');
+  } else {
+    // Use LocalAuth when no remote store is configured. LocalAuth uses the
+    // local filesystem at `dataPath` to persist session data.
+    authStrategy = new LocalAuth({ dataPath: sessionDir });
+    console.log('[WhatsAppService] Using LocalAuth (local filesystem)');
+  }
 
   client = new Client({
     puppeteer: puppeteerOptions,
-    authStrategy: new RemoteAuth({
-      clientId: 'AWS',
-      dataPath: 'whatsapp-session',
-      store: store,
-      backupSyncIntervalMs: 600000
-    })
+    authStrategy
   });
 
 
