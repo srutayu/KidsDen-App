@@ -2,6 +2,7 @@
 const Payment = require('../models/paymentModel');
 const Class = require('../models/classModel');
 const classModel = require('../models/classModel');
+const { default: mongoose } = require('mongoose');
 
 // Create or update fee structure for a class
 exports.createOrUpdateFees = async (req, res) => {
@@ -91,19 +92,26 @@ exports.getStatusOfPayments = async (req, res) => {
       return res.status(400).json({ error: 'classId, year and month are required' });
     }
 
+    let classObjId;
+    try {
+      classObjId = new mongoose.Types.ObjectId(classId);
+    } catch (e) {
+      return res.status(400).json({ error: 'Invaleeid classId' });
+    }
+
     // Fetch the class to get all studentIds
-    const classData = await Class.findOne({_id: classId}).lean();
+    const classData = await Class.findOne({_id: classObjId}).lean();
     if (!classData) {
       return res.status(404).json({ error: 'Class not found' });
     }
     const allStudents = classData.studentIds.map(id => id.toString());
 
     // Fetch payment records for class, year and month
-    const payments = await Payment.find({ classId, year: parseInt(year), month }).lean();
+    const payments = await Payment.find({ classId: classObjId, year: parseInt(year), month }).lean();
 
     // Summary count of statuses from payments
     const summaryAggregation = await Payment.aggregate([
-      { $match: { classId, year: parseInt(year), month } },
+      { $match: { classId: classObjId, year: parseInt(year), month } },
       {
         $group: {
           _id: '$status',
@@ -120,12 +128,12 @@ exports.getStatusOfPayments = async (req, res) => {
       if (!acc[payment.status]) {
         acc[payment.status] = [];
       }
-      acc[payment.status].push(payment.studentId);
+      acc[payment.status].push(payment.studentId.toString());
       return acc;
     }, {});
 
     // Students with payment record (any status)
-    const studentsWithPayments = payments.map(p => p.studentId);
+    const studentsWithPayments = payments.map(p => p.studentId.toString());
 
     // Calculate unpaid as students in class with NO payment record for that month
     const unpaidStudents = allStudents.filter(sId => !studentsWithPayments.includes(sId));
