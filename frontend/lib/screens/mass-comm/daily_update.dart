@@ -9,6 +9,7 @@ import 'package:frontend/models/classroom_model.dart';
 import 'package:frontend/provider/auth_provider.dart';
 import 'package:frontend/provider/user_data_provider.dart';
 import 'package:frontend/screens/widgets/toast_message.dart';
+import 'package:frontend/services/text_formatting.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 
@@ -139,7 +140,7 @@ class _DailyClassUpdatePageState extends State<DailyClassUpdatePage> {
 
   for (final section in _sections) {
     if (section.heading.trim().isNotEmpty || section.body.trim().isNotEmpty) {
-      buffer.writeln(section.heading.toUpperCase());
+      buffer.writeln("**__${section.heading.toUpperCase()}__**");
       buffer.writeln(section.body.trim());
       buffer.writeln('');
     }
@@ -147,7 +148,7 @@ class _DailyClassUpdatePageState extends State<DailyClassUpdatePage> {
 
   buffer.writeln("Regards,\n$username");
 
-  final formattedMessage = buffer.toString().trim();
+  final formattedMessage =  buffer.toString().trim();
 
   if (formattedMessage.isEmpty) {
     showToast('No message composed');
@@ -161,7 +162,7 @@ class _DailyClassUpdatePageState extends State<DailyClassUpdatePage> {
       title: const Text('Preview Message'),
       content: SingleChildScrollView(
         child: Text(
-          formattedMessage,
+          stripFormatting(buffer.toString().trim()),
           style: const TextStyle(height: 1.4),
         ),
       ),
@@ -201,11 +202,10 @@ class _DailyClassUpdatePageState extends State<DailyClassUpdatePage> {
     if (response.statusCode == 200) {
       showToast('✅ Update sent to selected classes.');
     } else {
-      showToast('❌ Failed to send Broadcast');
+      showToast('Failed to send update');
     }
   } catch (e) {
-    showToast('⚠️ Error sending broadcast.');
-    print('Broadcast error: $e');
+    showToast(' Error sending update.');
   }
 }
 

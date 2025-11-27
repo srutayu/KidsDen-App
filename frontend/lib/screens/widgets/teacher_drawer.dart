@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:frontend/controllers/auth_controller.dart';
 import 'package:frontend/provider/user_data_provider.dart';
-import 'package:frontend/screens/admin/update/broadcast/daily_update.dart';
+import 'package:frontend/screens/mass-comm/daily_update.dart';
 import 'package:frontend/screens/auth/onboarding_page.dart';
-import 'package:frontend/screens/admin/update/broadcast/broadcast_screen.dart';
+import 'package:frontend/screens/mass-comm/broadcast_screen.dart';
 import 'package:provider/provider.dart';
 
 class TeacherDrawer extends StatefulWidget {
