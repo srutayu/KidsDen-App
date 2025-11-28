@@ -11,6 +11,7 @@ import 'package:frontend/screens/chat/videoPlayer.dart';
 import 'package:frontend/screens/widgets/measure_size.dart';
 import 'package:frontend/screens/widgets/toast_message.dart';
 import 'package:frontend/services/s3_services.dart';
+import 'package:frontend/services/text_formatting.dart';
 import 'package:hive_flutter/adapters.dart';
 import 'package:intl/intl.dart';
 import 'package:open_filex/open_filex.dart';
@@ -294,10 +295,11 @@ void _showMessageMenu(BuildContext context, Map<dynamic, dynamic> msg, bool isMe
   // Handle user selection
   switch (selected) {
     case 'copy':
-      if (msg['content'] != null && msg['content'].toString().isNotEmpty) {
-        await Clipboard.setData(ClipboardData(text: msg['content']));
-        showToast('Text Copied');
-      }
+  if (msg['content'] != null && msg['content'].toString().isNotEmpty) {
+    final clean = stripFormatting(msg['content'].toString());
+    await Clipboard.setData(ClipboardData(text: clean));
+    showToast('Text Copied');
+  }
       break;
 
     case 'delete':
@@ -415,7 +417,6 @@ void _showMessageMenu(BuildContext context, Map<dynamic, dynamic> msg, bool isMe
     shouldDoFullFetch = false;
   } else {
     print("✔ Hive is fully up to date → NO FETCH NEEDED");
-    return;
   }
 
   // --- Open messages box ---
@@ -1299,13 +1300,13 @@ Widget _buildFilePreview(Map parsed, String messageId, String sender) {
                     }
 
                     // fallback: plain text
-                    return Text(
-                      parsed is String ? parsed : (parsed?.toString() ?? ' '),
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: isDarkMode
-                            ? Colors.white
-                            : Colors.black // dark grey for light backgrounds
+                    return Text.rich(
+                      parseMessage(
+                        parsed is String ? parsed : (parsed?.toString() ?? ' '),
+                        TextStyle(
+                          fontSize: 16,
+                          color: isDarkMode ? Colors.white : Colors.black,
+                        ),
                       ),
                     );
                   }),
