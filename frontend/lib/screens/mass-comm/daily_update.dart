@@ -83,33 +83,31 @@ class _DailyClassUpdatePageState extends State<DailyClassUpdatePage> {
 
   void _autoAddBullets(Section section) {
   var text = section.controller.text;
-  
-   // 🔹 Add a bullet at the very start if not already there
-  if (text.isNotEmpty && !text.trimLeft().startsWith('•')) {
-    text = '• $text';
-    section.controller
-      ..text = text
-      ..selection = TextSelection.fromPosition(
-        TextPosition(offset: text.length),
-      );
 
-    section.body = text;
-  }
+  if (text.length == 1 && text != '•') {
+    final newText = '• $text';
 
-  // If user just pressed Enter (i.e. last char is \n)
-  if (text.isNotEmpty && text.endsWith('\n')) {
-    final newText = '$text• ';
     section.controller
       ..text = newText
-      ..selection = TextSelection.fromPosition(
-        TextPosition(offset: newText.length),
-      );
+      ..selection = TextSelection.collapsed(offset: newText.length);
 
-    setState(() {
-      section.body = newText;
-    });
+    section.body = newText;
+    return; // Stop here
+  }
+
+  // --- Add bullet when pressing Enter ---
+  if (text.endsWith('\n')) {
+    final newText = '$text• ';
+
+    section.controller
+      ..text = newText
+      ..selection = TextSelection.collapsed(offset: newText.length);
+
+    section.body = newText;
+    return;
   }
 }
+
 
   /// List of all rows on the page
   final List<Section> _sections = [Section()];
@@ -136,11 +134,11 @@ class _DailyClassUpdatePageState extends State<DailyClassUpdatePage> {
     return;
   }
   final buffer = StringBuffer();
-  buffer.writeln("Today's Work\n");
+  buffer.writeln("**Today's Work**\n");
 
   for (final section in _sections) {
     if (section.heading.trim().isNotEmpty || section.body.trim().isNotEmpty) {
-      buffer.writeln("**__${section.heading.toUpperCase()}__**");
+      buffer.writeln("**${section.heading.toUpperCase()}**");
       buffer.writeln(section.body.trim());
       buffer.writeln('');
     }
