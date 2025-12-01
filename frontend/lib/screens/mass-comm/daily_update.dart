@@ -9,6 +9,7 @@ import 'package:frontend/models/classroom_model.dart';
 import 'package:frontend/provider/auth_provider.dart';
 import 'package:frontend/provider/user_data_provider.dart';
 import 'package:frontend/screens/widgets/toast_message.dart';
+import 'package:frontend/services/text_formatting.dart';
 import 'package:http/http.dart' as http;
 import 'package:provider/provider.dart';
 
@@ -82,33 +83,31 @@ class _DailyClassUpdatePageState extends State<DailyClassUpdatePage> {
 
   void _autoAddBullets(Section section) {
   var text = section.controller.text;
-  
-   // 🔹 Add a bullet at the very start if not already there
-  if (text.isNotEmpty && !text.trimLeft().startsWith('•')) {
-    text = '• $text';
-    section.controller
-      ..text = text
-      ..selection = TextSelection.fromPosition(
-        TextPosition(offset: text.length),
-      );
 
-    section.body = text;
-  }
+  if (text.length == 1 && text != '•') {
+    final newText = '• $text';
 
-  // If user just pressed Enter (i.e. last char is \n)
-  if (text.isNotEmpty && text.endsWith('\n')) {
-    final newText = '$text• ';
     section.controller
       ..text = newText
-      ..selection = TextSelection.fromPosition(
-        TextPosition(offset: newText.length),
-      );
+      ..selection = TextSelection.collapsed(offset: newText.length);
 
-    setState(() {
-      section.body = newText;
-    });
+    section.body = newText;
+    return; // Stop here
+  }
+
+  // --- Add bullet when pressing Enter ---
+  if (text.endsWith('\n')) {
+    final newText = '$text• ';
+
+    section.controller
+      ..text = newText
+      ..selection = TextSelection.collapsed(offset: newText.length);
+
+    section.body = newText;
+    return;
   }
 }
+
 
   /// List of all rows on the page
   final List<Section> _sections = [Section()];
@@ -135,11 +134,11 @@ class _DailyClassUpdatePageState extends State<DailyClassUpdatePage> {
     return;
   }
   final buffer = StringBuffer();
-  buffer.writeln("Today's Work\n");
+  buffer.writeln("**Today's Work**\n");
 
   for (final section in _sections) {
     if (section.heading.trim().isNotEmpty || section.body.trim().isNotEmpty) {
-      buffer.writeln(section.heading.toUpperCase());
+      buffer.writeln("**${section.heading.toUpperCase()}**");
       buffer.writeln(section.body.trim());
       buffer.writeln('');
     }
@@ -147,7 +146,7 @@ class _DailyClassUpdatePageState extends State<DailyClassUpdatePage> {
 
   buffer.writeln("Regards,\n$username");
 
-  final formattedMessage = buffer.toString().trim();
+  final formattedMessage =  buffer.toString().trim();
 
   if (formattedMessage.isEmpty) {
     showToast('No message composed');
@@ -161,7 +160,7 @@ class _DailyClassUpdatePageState extends State<DailyClassUpdatePage> {
       title: const Text('Preview Message'),
       content: SingleChildScrollView(
         child: Text(
-          formattedMessage,
+          stripFormatting(buffer.toString().trim()),
           style: const TextStyle(height: 1.4),
         ),
       ),
@@ -201,11 +200,10 @@ class _DailyClassUpdatePageState extends State<DailyClassUpdatePage> {
     if (response.statusCode == 200) {
       showToast('✅ Update sent to selected classes.');
     } else {
-      showToast('❌ Failed to send Broadcast');
+      showToast('Failed to send update');
     }
   } catch (e) {
-    showToast('⚠️ Error sending broadcast.');
-    print('Broadcast error: $e');
+    showToast(' Error sending update.');
   }
 }
 
